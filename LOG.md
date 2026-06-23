@@ -2,6 +2,11 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Tjekliste: opdel rengøring + FilterBalls-backwash
+- Delt "Børst sider & støvsug bund" op i to opgaver: "Børst siderne" (id `brush`) og "Støvsug bunden" (id `vacuum`, bevarer historik).
+- FilterBalls sidder i et sandfilter hos brugeren → opgaven hedder nu "Returskyl FilterBalls (backwash + rinse)" (før: "Skyl/vask"), plus ny månedlig "Spul FilterBalls rene" (kun ved filterType=balls).
+- Ny frekvens `monthly` (≥30 dage) i FREQ_LABEL + isDue.
+
 ## 2026-06-23 — Fix: plan fejlede (Anthropic 529 overloaded)
 - Symptom: "Opdatér plan" gav "Kunne ikke hente planen". `/api/plan` returnerede generisk 500.
 - Rod-årsag: Anthropic svarede **529 overloaded** (forbigående). `resp.raise_for_status()` skjulte årsagen som 500. Model/nøgle var i orden.
