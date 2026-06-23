@@ -15,8 +15,14 @@
 - [ ] PWA-manifest så appen kan lægges på hjemmeskærmen som ikon.
 - [ ] Flere produkter (pH-Minus/-Plus mængdeforslag, Flocking Sticks-tilstand).
 - [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
+- [ ] Ekstra dosis: mulighed for at indtaste egen mængde (i stedet for den faste).
+- [ ] Vis dagens ekstra doser som små chips på "I dag"-fanen.
+- [ ] "Fortryd" på enkelte log-poster (slet en fejl-registrering).
+- [ ] Lille trend-graf over pH/aktiv ilt over tid.
+- [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Ekstra dosis-registrering under "Dine doser" (+ Givet) — havner i log og medtages i AI-planen.
 - [x] Adresse-opslag i Indstillinger (Nominatim) der udfylder koordinater.
 - [x] Oprettet privat GitHub-repo og deployet på Railway med Postgres (`/api/health` → `{"ok":true,"db":true}`).
 - [x] FastAPI-service: state, vejr-proxy, plan-proxy, static.

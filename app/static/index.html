@@ -168,10 +168,18 @@ function Poolvagten(){
     });
     showToast("Måling gemt");
   };
+  const logExtra=(name,amount)=>{ if(!me){ showToast("Vælg en profil først"); return; }
+    mutate(s=>{ const log=[{id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Ekstra dosis: ${name}${amount?` · ${amount}`:""}`,initials:me,extra:{name,amount}},...(s.log||[])];
+      return {...s,log:log.slice(0,60)};
+    });
+    showToast("Ekstra dosis registreret");
+  };
 
   const generatePlan=async()=>{ if(!state)return; setPlanErr(null); setPlanLoading(true);
     try{
       const d=doses(cfg); const lastOxy=lastDone(state.checks,"oxy")||"ukendt"; let wxLines="";
+      const recentExtras=(state.log||[]).filter(e=>e.extra && (Date.now()-e.ts)<4*86400000);
+      let extraLines=""; if(recentExtras.length){ extraLines="EKSTRA DOSER GIVET FOR NYLIG (ud over de faste):\n"+recentExtras.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.extra.name}${e.extra.amount?` (${e.extra.amount})`:""}`).join("\n")+"\n"; }
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
@@ -180,7 +188,7 @@ function Poolvagten(){
 POOL: ${cfg.poolSize} liter. Sandfilterpumpe ${cfg.pumpCap} l/t. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
 FASTE DOSER: OxyChock ${d.oxy3} g + Aktivator ${d.akt3} ml hver 3. dag. KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l.
 SIDST GIVET OXYCHOCK: ${lastOxy}.
-VEJRUDSIGT:
+${extraLines}VEJRUDSIGT:
 ${wxLines}
 Returnér KUN gyldig JSON, ingen markdown, ingen tekst udenom, præcis dette format:
 {"days":[{"date":"YYYY-MM-DD","weekday":"Tirsdag","weather":"24° klart","headline":"kort, maks 6 ord","actions":["punkt med dosis hvor relevant"],"tip":"én kort sætning","alert":"kort advarsel eller null"}]}
@@ -190,6 +198,7 @@ REGLER:
 - temp > 22°C: anbefal hyppigere iltmåling, evt. ekstra halv dosis (${d.oxyDaily} g) og flere pumpetimer.
 - nedbør > 3 mm: mind om pH-tjek efter regn.
 - vandfald JA: mind om at pH stiger, hav pH-Minus klar.
+- Hvis der er givet ekstra doser for nylig (se ovenfor): tag højde for det — anbefal ikke at gentage en chokbehandling samme dag, og nævn kort relevant opfølgning (fx mål aktiv ilt og pH dagen efter et chok).
 - 1–4 actions pr. dag. Dansk, venligt, kort. Sæt alert til null hvis intet særligt.`;
       const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
       const data=await r.json(); const clean=(data.text||"").replace(/```json|```/g,"").trim();
@@ -279,14 +288,14 @@ REGLER:
 
           <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L`}/>
           <section style={{...card,padding:0,overflow:"hidden"}}>
-            <DoseRow a="OxyChock + Aktivator" b="Hver 3. dag" c={`${d.oxy3} g + ${d.akt3} ml`}/>
-            <DoseRow a="OxyChock (alt. dagligt)" b="Dagligt" c={`${d.oxyDaily} g`}/>
-            <DoseRow a="KlarPool" b="Ugentligt" c={`${d.klarWeekly} ml`}/>
-            <DoseRow a="FlokPool (uklart vand)" b="Efter behov" c={`${d.flokMin}–${d.flokMax} ml`}/>
-            <DoseRow a="OxyChock chok (grønt vand)" b="Efter behov" c={`${d.oxyProblem} g`}/>
-            <DoseRow a="Sæsonstart" b="Opstart" c={`${d.oxyStart} g + ${d.aktStart} ml`} last/>
+            <DoseRow a="OxyChock + Aktivator" b="Hver 3. dag" c={`${d.oxy3} g + ${d.akt3} ml`} onLog={logExtra}/>
+            <DoseRow a="OxyChock (alt. dagligt)" b="Dagligt" c={`${d.oxyDaily} g`} onLog={logExtra}/>
+            <DoseRow a="KlarPool" b="Ugentligt" c={`${d.klarWeekly} ml`} onLog={logExtra}/>
+            <DoseRow a="FlokPool (uklart vand)" b="Efter behov" c={`${d.flokMin}–${d.flokMax} ml`} onLog={logExtra}/>
+            <DoseRow a="OxyChock chok (grønt vand)" b="Efter behov" c={`${d.oxyProblem} g`} onLog={logExtra}/>
+            <DoseRow a="Sæsonstart" b="Opstart" c={`${d.oxyStart} g + ${d.aktStart} ml`} onLog={logExtra} last/>
           </section>
-          <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.5}}>Opløs altid OxyChock i en spand vand først og hæld langs kanten. Justér pH før flokning. Brug dunkens låg som målebæger.</p>
+          <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.5}}>Tryk <b>+ Givet</b> for at registrere en ekstra dosis — den havner i loggen og tages med i næste plan. Opløs altid OxyChock i en spand vand først og hæld langs kanten. Justér pH før flokning. Brug dunkens låg som målebæger.</p>
         </>}
 
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
@@ -371,9 +380,10 @@ function Reading({label,hint,placeholder,last,onSave}){ const [v,setV]=useState(
     {last&&<div style={{fontSize:11,color:T.teal,marginTop:7}}>Sidst: <b>{last.value}</b> · {last.initials} · {timeAgo(last.ts)}</div>}
   </div>;
 }
-function DoseRow({a,b,c,last}){ return <div style={{display:"flex",alignItems:"center",padding:"12px 16px",borderBottom:last?"none":`1px solid ${T.line}`}}>
-  <div style={{flex:1}}><div style={{fontSize:13.5,fontWeight:600}}>{a}</div><div style={{fontSize:11.5,color:T.sub}}>{b}</div></div>
-  <div style={{fontSize:14,fontWeight:800,color:T.teal}}>{c}</div></div>; }
+function DoseRow({a,b,c,last,onLog}){ return <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:last?"none":`1px solid ${T.line}`}}>
+  <div style={{flex:1,minWidth:0}}><div style={{fontSize:13.5,fontWeight:600}}>{a}</div><div style={{fontSize:11.5,color:T.sub}}>{b}</div></div>
+  <div style={{fontSize:14,fontWeight:800,color:T.teal,whiteSpace:"nowrap"}}>{c}</div>
+  {onLog&&<button className="pv-btn" onClick={()=>onLog(a,c)} title="Registrér som givet i dag" style={{...miniPill,background:T.aquaSoft,color:T.teal,flexShrink:0}}>+ Givet</button>}</div>; }
 function PlanView({state,planLoading,planErr,onGenerate}){ const plan=state.plan;
   return <>
     <SectionTitle icon={Sparkles} title="Plan for de næste dage"/>

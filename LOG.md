@@ -2,6 +2,12 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Feature: registrér ekstra doser
+- "Dine doser": hver række har nu en valgfri **+ Givet**-knap, der logger en ekstra dosis (med profil) — fx ekstra OxyChock-chok 400 g.
+- Datamodel: ingen ny top-level — ekstra doser gemmes som almindelige log-poster med et `extra:{name,amount}`-mærke (holder "ét JSON-dokument").
+- AI-plan: `generatePlan` tilføjer sektionen "EKSTRA DOSER GIVET FOR NYLIG" (sidste 4 dage) + en regel, så Claude ikke anbefaler at gentage et chok samme dag og nævner opfølgning.
+- Aldrig påkrævet — kun en mulighed, som ønsket.
+
 ## 2026-06-23 — Oprydning + nyt domæne
 - Slettede overflødig `poolvagten.jsx` (oprindelig artifact) — hele UI'et bor i `app/static/index.html`, og intet refererede til filen.
 - Nyt, kortere public domæne: **poolvagten.up.railway.app** (det gamle `web-production-6f6f1a…` blev fjernet, hvilket kortvarigt gav "Application not found" på den gamle adresse — ikke en kodefejl).
