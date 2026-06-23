@@ -177,8 +177,11 @@ async def plan(req: PlanRequest) -> dict:
                 "messages": [{"role": "user", "content": req.prompt}],
             },
         )
-        resp.raise_for_status()
-        data = resp.json()
+    if resp.status_code != 200:
+        # Send den faktiske fejl fra Anthropic videre, så årsagen er synlig
+        # (ukendt model, ugyldig nøgle, tom kredit, rate limit ...).
+        raise HTTPException(502, f"Anthropic {resp.status_code} (model={MODEL}): {resp.text[:400]}")
+    data = resp.json()
     text = "".join(
         block.get("text", "")
         for block in data.get("content", [])
