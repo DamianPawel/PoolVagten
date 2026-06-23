@@ -2,6 +2,10 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Log grupperet per dag (foldbar)
+- `LogView` grupperer nu hændelser per dato i foldbare sektioner ("I dag", "I går", ellers "Ugedag DD/MM") med antal hændelser; dagens sektion er åben som standard.
+- Inde i hver dag vises hvem (initialer) + hvad + klokkeslæt. Nye hjælpere `dayHeading`/`clockTime`.
+
 ## 2026-06-23 — Tjekliste: opdel rengøring + FilterBalls-backwash
 - Delt "Børst sider & støvsug bund" op i to opgaver: "Børst siderne" (id `brush`) og "Støvsug bunden" (id `vacuum`, bevarer historik).
 - FilterBalls sidder i et sandfilter hos brugeren → opgaven hedder nu "Returskyl FilterBalls (backwash + rinse)" (før: "Skyl/vask"), plus ny månedlig "Spul FilterBalls rene" (kun ved filterType=balls).

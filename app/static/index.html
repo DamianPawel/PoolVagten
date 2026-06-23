@@ -473,21 +473,45 @@ function PlanView({state,planLoading,planErr,onGenerate}){ const plan=state.plan
     ))}
   </>;
 }
-function LogView({log}){ return <>
-  <SectionTitle icon={History} title="Hvem gjorde hvad"/>
-  {log.length===0?(
-    <section style={{...card,textAlign:"center",color:T.sub,fontSize:13.5,padding:28}}>Ingen aktivitet endnu. Sæt flueben på "I dag", så dukker det op her — med initialer, så hele husstanden kan følge med.</section>
-  ):(
-    <section style={{...card,padding:4}}>
-      {log.map(e=>(
-        <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",borderBottom:`1px solid ${T.line}`}}>
-          <div style={{width:34,height:34,borderRadius:10,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12.5,fontWeight:800,flexShrink:0}}>{e.initials}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13.5,fontWeight:600}}>{e.label}</div><div style={{fontSize:11.5,color:T.sub}}>{fullTime(e.ts)}</div></div>
-        </div>
-      ))}
-    </section>
-  )}
-</>; }
+function dayHeading(ds){
+  if(ds===today())return "I dag";
+  const y=new Date(); y.setDate(y.getDate()-1);
+  if(ds===dateStr(y))return "I går";
+  const [Y,M,D]=ds.split("-").map(Number); const dt=new Date(Y,M-1,D);
+  return `${WEEKDAYS[dt.getDay()]} ${pad(D)}/${pad(M)}`;
+}
+function clockTime(ts){ const d=new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function LogView({log}){
+  const groups=[]; const idx={};
+  for(const e of log){ const ds=dateStr(new Date(e.ts)); if(idx[ds]===undefined){ idx[ds]=groups.length; groups.push({ds,items:[]}); } groups[idx[ds]].items.push(e); }
+  const [open,setOpen]=useState({[today()]:true});
+  const toggle=ds=>setOpen(o=>({...o,[ds]:!o[ds]}));
+  return <>
+    <SectionTitle icon={History} title="Hvem gjorde hvad"/>
+    {groups.length===0?(
+      <section style={{...card,textAlign:"center",color:T.sub,fontSize:13.5,padding:28}}>Ingen aktivitet endnu. Sæt flueben på "I dag", så dukker det op her — med initialer, så hele husstanden kan følge med.</section>
+    ):(
+      <section style={{...card,padding:4}}>
+        {groups.map(g=>{ const isOpen=!!open[g.ds]; const n=g.items.length;
+          return <div key={g.ds}>
+            <button className="pv-btn" onClick={()=>toggle(g.ds)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 12px",background:"none",border:"none",borderBottom:`1px solid ${T.line}`,cursor:"pointer",fontFamily:FONT,textAlign:"left"}}>
+              <span style={{fontSize:13.5,fontWeight:800,color:T.teal,flex:1}}>{dayHeading(g.ds)}</span>
+              <span style={{fontSize:11.5,color:T.sub}}>{n} {n===1?"hændelse":"hændelser"}</span>
+              <ChevronDown size={16} color={T.sub} style={{transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}/>
+            </button>
+            {isOpen&&g.items.map(e=>(
+              <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px 10px 16px",borderBottom:`1px solid ${T.line}`}}>
+                <div style={{width:32,height:32,borderRadius:10,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{e.initials}</div>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:13.5,fontWeight:600}}>{e.label}</div><div style={{fontSize:11.5,color:T.sub}}>{clockTime(e.ts)}</div></div>
+              </div>
+            ))}
+          </div>;
+        })}
+      </section>
+    )}
+  </>;
+}
+
 function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
   const [addr,setAddr]=useState(""); const [geoBusy,setGeoBusy]=useState(false); const [geoErr,setGeoErr]=useState(null);
   const set=(k,v)=>setF(s=>({...s,[k]:v})); const setRate=(k,v)=>setF(s=>({...s,rates:{...s.rates,[k]:parseFloat(v)||0}})); const save=()=>{ onSave(f); showToast("Gemt"); };
