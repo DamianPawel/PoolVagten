@@ -86,10 +86,8 @@ function buildTasks(cfg, d){
     t.push({ id:"klor", label:"Tjek & justér klor (1–3 mg/l)", freq:"daily", dose:"hold 1–3 mg/l" });
   } else if(cfg.oxygenForm==="combitabs"){
     t.push({ id:"combitabs", label:"CombiTabs i skimmer/dispenser", freq:"daily", dose:`${d.combiTabs} stk` });
-    t.push({ id:"klorchok", label:"Klor-chok (varme perioder)", freq:"every14", dose:"følg etiket" });
   } else {
     t.push({ id:"oxy", label:"OxyChock + Aktivator", freq:"every3", dose:`${d.oxy3} g + ${d.akt3} ml` });
-    t.push({ id:"klorchok", label:"Klor-chok (varme perioder)", freq:"every14", dose:"følg etiket" });
   }
   t.push({ id:"klar", label:"KlarPool (algeforebyggelse)", freq:"weekly", dose:`${d.klarWeekly} ml` });
   const fb={ sand:"Returskyl sandfilter (backwash + rinse)", glass:"Returskyl filterglas (backwash + rinse)", cartridge:"Rens patronfilter", balls:"Skyl/vask FilterBalls" }[cfg.filterType||"sand"];
@@ -106,12 +104,10 @@ function buildDoseRows(cfg, d){
     rows.push(["Klor-chok (grønt vand)","Efter behov","doser følger"]);
   } else if(cfg.oxygenForm==="combitabs"){
     rows.push(["CombiTabs","Dagligt (1 pr. 3000 L)",`${d.combiTabs} stk`]);
-    rows.push(["Klor-chok","Hver 14. dag (varme)","følg etiket"]);
   } else {
     rows.push(["OxyChock + Aktivator","Hver 3. dag",`${d.oxy3} g + ${d.akt3} ml`]);
     rows.push(["OxyChock (alt. dagligt)","Dagligt",`${d.oxyDaily} g`]);
     rows.push(["OxyChock chok (grønt vand)","Efter behov",`${d.oxyProblem} g`]);
-    rows.push(["Klor-chok","Hver 14. dag (varme)","følg etiket"]);
   }
   rows.push(["KlarPool","Ugentligt",`${d.klarWeekly} ml`]);
   rows.push(["FlokPool (uklart vand)","Efter behov",`${d.flokMin}–${d.flokMax} ml`]);
@@ -243,8 +239,8 @@ function Poolvagten(){
       const doseLine = cfg.system==="chlorine"
         ? `Hold frit klor 1–3 mg/l (præcise klordoser er ikke konfigureret endnu — anbefal måling og justering, ikke faste gram). KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, frit klor 1–3 mg/l, cyanursyre under 80 ppm.`
         : (cfg.oxygenForm==="combitabs"
-            ? `CombiTabs ${d.combiTabs} stk dagligt (1 pr. 3000 L). KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l. Klor-chok hver 14. dag i varme perioder.`
-            : `OxyChock ${d.oxy3} g + Aktivator ${d.akt3} ml hver 3. dag. KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l. Klor-chok hver 14. dag i varme perioder.`);
+            ? `CombiTabs ${d.combiTabs} stk dagligt (1 pr. 3000 L). KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l.`
+            : `OxyChock ${d.oxy3} g + Aktivator ${d.akt3} ml hver 3. dag. KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l.`);
       const uvLine = cfg.uvLamp ? "UV-LYS aktivt: kemiforbruget er reduceret (~40%), men mål stadig jævnligt; UV virker kun mens pumpen kører, så prioritér pumpetid. Mind om årligt pæreskift ved sæsonstart.\n" : "";
       const filterName = ({sand:"sandfilter",glass:"filterglas",cartridge:"patronfilter",balls:"FilterBalls"})[cfg.filterType||"sand"];
       let wxLines="";
@@ -267,8 +263,7 @@ REGLER:
 - Beregn selv hvilke dage hoveddesinfektion skal gives ud fra "sidst givet" og intervallet (aktiv ilt OxyChock = hver 3. dag; CombiTabs og klor = dagligt tilsyn).
 - temp > 22°C: anbefal hyppigere måling, evt. ekstra dosis og flere pumpetimer.
 - nedbør > 3 mm: mind om pH-tjek efter regn.
-- vandfald JA: mind om at pH stiger, hav pH-Minus klar.
-- Aktiv ilt-system: mind om klor-chok hver 14. dag i varme perioder.${cfg.uvLamp?"\n- UV aktivt: hold doser i den lave ende, men mål for at bekræfte.":""}
+- vandfald JA: mind om at pH stiger, hav pH-Minus klar.${cfg.uvLamp?"\n- UV aktivt: hold doser i den lave ende, men mål for at bekræfte.":""}
 - Hvis der er givet ekstra doser for nylig (se ovenfor): tag højde for det — anbefal ikke at gentage en chokbehandling samme dag, og nævn kort relevant opfølgning (fx mål dagen efter et chok).
 - 1–4 actions pr. dag. Dansk, venligt, kort. Sæt alert til null hvis intet særligt.`;
       const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});

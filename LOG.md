@@ -2,6 +2,11 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Adskil systemerne helt (aktiv ilt vs klor)
+- Efter ønske: ingen krydsreferencer. Aktiv ilt-tilstand viser kun ilt-produkter (klor-chok-opgave og -dose-række fjernet); klor-tilstand viser kun klor (ingen OxyChock/sæsonstart — var allerede tilfældet).
+- Fjernet i `index.html`: klor-chok fra `buildTasks` og `buildDoseRows` (aktiv ilt-grene), klor-chok-sætningen i AI-prompten og den tilhørende plan-regel. UV-reglen bevaret.
+- Verificeret: JSX transpilerer rent (Babel 7); eneste tilbageværende "Klor-chok (grønt vand)" hører til klor-tilstand.
+
 ## 2026-06-23 — Dual-system, UV & udvidet katalog (v1.1.0)
 - **Dual-system:** `config.system` ("oxygen"/"chlorine") styrer trin 2-produkter, måleværdier (aktiv ilt 3–5 mg/l vs frit klor 1–3 mg/l) og AI-prompten. Klor-doser er placeholdere ("doser følger") indtil guiderne modtages — resten (pH, klar pool, flokning, målinger) virker for begge.
 - **Desinfektionsform:** `config.oxygenForm` ("oxychock"/"combitabs"). CombiTabs doseres 1 tablet/3.000 L dagligt.

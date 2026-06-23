@@ -43,7 +43,7 @@ Tal pr. 10.000 liter (undtagen hvor andet er nævnt). Skaleres lineært med pool
 
 Mål-niveauer: pH **7,0–7,4** (ideelt 7,2); aktiv ilt **3–5 mg/l**; frit klor **1–3 mg/l**; cyanursyre **< 80 ppm**; filtertid **≥ 8 t/dag**.
 
-Aktiv ilt-system: lav **klor-chok hver 14. dag** i varme perioder. Klor og aktiv ilt er kompatible.
+App'en holder systemerne adskilt: i aktiv ilt-tilstand vises kun ilt-produkter, i klor-tilstand kun klor — ingen krydsanbefalinger. (Klor og aktiv ilt er teknisk kompatible iflg. Swim & Fun, men appen blander dem ikke.)
 Flokning, sandfilter: i skimmeren mens pumpen kører → returskyl efter 2–3 dage. Patronfilter: pumpe slukket, bundfæld 1–2 dage, støvsug. FilterBalls: kun SeaKlear.
 UV-faktor (×0,6 på løbende desinfektion) er vejledende — verificér med teststrips.
 
