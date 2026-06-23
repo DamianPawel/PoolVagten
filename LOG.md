@@ -2,6 +2,11 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Fix: plan fejlede (Anthropic 529 overloaded)
+- Symptom: "Opdatér plan" gav "Kunne ikke hente planen". `/api/plan` returnerede generisk 500.
+- Rod-årsag: Anthropic svarede **529 overloaded** (forbigående). `resp.raise_for_status()` skjulte årsagen som 500. Model/nøgle var i orden.
+- Fix: `/api/plan` returnerer nu den faktiske upstream-fejl (502 m. status+besked) **og** prøver igen ved 529/503/429 med backoff (1,5s · 3s · 4,5s, op til 4 forsøg).
+
 ## 2026-06-23 — Adskil systemerne helt (aktiv ilt vs klor)
 - Efter ønske: ingen krydsreferencer. Aktiv ilt-tilstand viser kun ilt-produkter (klor-chok-opgave og -dose-række fjernet); klor-tilstand viser kun klor (ingen OxyChock/sæsonstart — var allerede tilfældet).
 - Fjernet i `index.html`: klor-chok fra `buildTasks` og `buildDoseRows` (aktiv ilt-grene), klor-chok-sætningen i AI-prompten og den tilhørende plan-regel. UV-reglen bevaret.

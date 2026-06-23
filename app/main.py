@@ -10,6 +10,7 @@ Bevidst holdt minimal: én tabel med ét JSON-dokument = "uhyrligt nemt".
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -163,24 +164,32 @@ class PlanRequest(BaseModel):
 async def plan(req: PlanRequest) -> dict:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY er ikke sat på serveren.")
+    payload = {
+        "model": MODEL,
+        "max_tokens": 1000,
+        "messages": [{"role": "user", "content": req.prompt}],
+    }
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    # Anthropic kan svare 529 (overloaded) / 503 / 429 i korte perioder.
+    # Prøv igen med stigende ventetid før vi giver op.
     async with httpx.AsyncClient(timeout=45) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "max_tokens": 1000,
-                "messages": [{"role": "user", "content": req.prompt}],
-            },
-        )
-    if resp.status_code != 200:
-        # Send den faktiske fejl fra Anthropic videre, så årsagen er synlig
-        # (ukendt model, ugyldig nøgle, tom kredit, rate limit ...).
-        raise HTTPException(502, f"Anthropic {resp.status_code} (model={MODEL}): {resp.text[:400]}")
+        for attempt in range(4):
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages", headers=headers, json=payload
+            )
+            if resp.status_code == 200:
+                break
+            if resp.status_code in (429, 503, 529) and attempt < 3:
+                await asyncio.sleep(1.5 * (attempt + 1))  # 1,5s · 3s · 4,5s
+                continue
+            # Vedvarende fejl (eller forbigående der ikke gav sig) — vis årsagen.
+            raise HTTPException(
+                502, f"Anthropic {resp.status_code} (model={MODEL}): {resp.text[:400]}"
+            )
     data = resp.json()
     text = "".join(
         block.get("text", "")
