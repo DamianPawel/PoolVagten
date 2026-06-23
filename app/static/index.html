@@ -66,18 +66,62 @@ const Home = ic(<><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /></>);
 const DEFAULT_CONFIG = {
   poolSize: 16000, pumpCap: 10000, lat: 55.4486, lng: 10.6622,
   locationName: "Kerteminde", useWaterfall: false, autoPlan: true,
-  rates: { oxyPer10k:40, oxyDailyPer10k:20, aktPer10k:25, klarStartPer10k:100, klarWeeklyPer10k:50, flokMinPer10k:50, flokMaxPer10k:100 },
+  system: "oxygen", oxygenForm: "oxychock", uvLamp: false, filterType: "sand",
+  rates: { oxyPer10k:40, oxyDailyPer10k:20, aktPer10k:25, klarStartPer10k:100, klarWeeklyPer10k:50, flokMinPer10k:50, flokMaxPer10k:100,
+           phMinusPer10k:150, phPlusPer10k:100, metalMinMlPer10k:300, metalMaxMlPer10k:500, seaklearMlPer2000:25 },
 };
-const TASKS = [
-  { id:"net", label:"Fjern blade & rens overflade", freq:"daily" },
-  { id:"ph", label:"Mål pH (mål: 7,0–7,4)", freq:"daily" },
-  { id:"oxy", label:"OxyChock + Aktivator", freq:"every3" },
-  { id:"klar", label:"KlarPool (algeforebyggelse)", freq:"weekly" },
-  { id:"backwash", label:"Returskyl sandfilter (backwash + rinse)", freq:"weekly" },
-  { id:"vacuum", label:"Børst sider & støvsug bund", freq:"weekly" },
-];
-const FREQ_LABEL = { daily:"Dagligt", every3:"Hver 3. dag", weekly:"Ugentligt" };
+const FREQ_LABEL = { daily:"Dagligt", every3:"Hver 3. dag", weekly:"Ugentligt", every14:"Hver 14. dag", yearly:"Årligt" };
+const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor" };
+const SYSTEMS = { oxygen:"Aktiv ilt", chlorine:"Klor" };
+const FILTERS = { sand:"Sandfilter", glass:"Filterglas", cartridge:"Patronfilter", balls:"FilterBalls" };
 const WEEKDAYS = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+
+/* Tjekliste afhænger af system / desinfektionsform / filtertype / UV */
+function buildTasks(cfg, d){
+  const t=[
+    { id:"net", label:"Fjern blade & rens overflade", freq:"daily" },
+    { id:"ph", label:"Mål pH (7,0–7,4)", freq:"daily" },
+  ];
+  if(cfg.system==="chlorine"){
+    t.push({ id:"klor", label:"Tjek & justér klor (1–3 mg/l)", freq:"daily", dose:"hold 1–3 mg/l" });
+  } else if(cfg.oxygenForm==="combitabs"){
+    t.push({ id:"combitabs", label:"CombiTabs i skimmer/dispenser", freq:"daily", dose:`${d.combiTabs} stk` });
+    t.push({ id:"klorchok", label:"Klor-chok (varme perioder)", freq:"every14", dose:"følg etiket" });
+  } else {
+    t.push({ id:"oxy", label:"OxyChock + Aktivator", freq:"every3", dose:`${d.oxy3} g + ${d.akt3} ml` });
+    t.push({ id:"klorchok", label:"Klor-chok (varme perioder)", freq:"every14", dose:"følg etiket" });
+  }
+  t.push({ id:"klar", label:"KlarPool (algeforebyggelse)", freq:"weekly", dose:`${d.klarWeekly} ml` });
+  const fb={ sand:"Returskyl sandfilter (backwash + rinse)", glass:"Returskyl filterglas (backwash + rinse)", cartridge:"Rens patronfilter", balls:"Skyl/vask FilterBalls" }[cfg.filterType||"sand"];
+  t.push({ id:"backwash", label:fb, freq:"weekly" });
+  t.push({ id:"vacuum", label:"Børst sider & støvsug bund", freq:"weekly" });
+  if(cfg.uvLamp) t.push({ id:"uvbulb", label:"Skift UV-pære", freq:"yearly" });
+  return t;
+}
+function mainDisinfectId(cfg){ return cfg.system==="chlorine" ? "klor" : (cfg.oxygenForm==="combitabs" ? "combitabs" : "oxy"); }
+function buildDoseRows(cfg, d){
+  const rows=[];
+  if(cfg.system==="chlorine"){
+    rows.push(["Klor løbende","Hold 1–3 mg/l","doser følger"]);
+    rows.push(["Klor-chok (grønt vand)","Efter behov","doser følger"]);
+  } else if(cfg.oxygenForm==="combitabs"){
+    rows.push(["CombiTabs","Dagligt (1 pr. 3000 L)",`${d.combiTabs} stk`]);
+    rows.push(["Klor-chok","Hver 14. dag (varme)","følg etiket"]);
+  } else {
+    rows.push(["OxyChock + Aktivator","Hver 3. dag",`${d.oxy3} g + ${d.akt3} ml`]);
+    rows.push(["OxyChock (alt. dagligt)","Dagligt",`${d.oxyDaily} g`]);
+    rows.push(["OxyChock chok (grønt vand)","Efter behov",`${d.oxyProblem} g`]);
+    rows.push(["Klor-chok","Hver 14. dag (varme)","følg etiket"]);
+  }
+  rows.push(["KlarPool","Ugentligt",`${d.klarWeekly} ml`]);
+  rows.push(["FlokPool (uklart vand)","Efter behov",`${d.flokMin}–${d.flokMax} ml`]);
+  rows.push(["SeaKlear","Ugentligt",`${d.seaklear} ml`]);
+  rows.push(["pH-Minus","Sænker pH 0,2",`${d.phMinus} g`]);
+  rows.push(["pH-Plus","Hæver pH 0,2",`${d.phPlus} g`]);
+  rows.push(["Metal Out","Metaller/kobber",`${d.metalMin}–${d.metalMax} ml`]);
+  if(cfg.system!=="chlorine") rows.push(["Sæsonstart","Opstart",`${d.oxyStart} g + ${d.aktStart} ml`]);
+  return rows;
+}
 
 /* ---------- helpers ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -88,11 +132,18 @@ const r0 = n => Math.round(n);
 
 function doses(cfg) {
   const f = cfg.poolSize/10000, x = cfg.rates;
+  const uv = cfg.uvLamp ? 0.6 : 1;                 // UV reducerer løbende desinfektion (vejledende)
+  const per2000 = cfg.poolSize/2000;
   return {
-    f, oxy3:r0(x.oxyPer10k*f), oxyDaily:r0(x.oxyDailyPer10k*f), akt3:r0(x.aktPer10k*f),
+    f, uv: cfg.uvLamp===true,
+    oxy3:r0(x.oxyPer10k*f*uv), oxyDaily:r0(x.oxyDailyPer10k*f*uv), akt3:r0(x.aktPer10k*f*uv),
+    combiTabs:Math.max(1, Math.round(cfg.poolSize/3000*uv)),
     klarWeekly:r0(x.klarWeeklyPer10k*f), klarStart:r0(x.klarStartPer10k*f),
     flokMin:r0(x.flokMinPer10k*f), flokMax:r0(x.flokMaxPer10k*f),
-    oxyStart:r0(200*f), oxyProblem:r0(250*f), aktStart:r0(100*f),
+    seaklear:r0((x.seaklearMlPer2000||25)*per2000),
+    phMinus:r0((x.phMinusPer10k||150)*f), phPlus:r0((x.phPlusPer10k||100)*f),
+    metalMin:r0((x.metalMinMlPer10k||300)*f), metalMax:r0((x.metalMaxMlPer10k||500)*f),
+    oxyStart:r0(100*f), oxyProblem:r0(250*f), aktStart:r0(100*f),
   };
 }
 function pumpHours(t){ if(t==null)return 5; if(t<18)return 4; if(t<22)return 5; if(t<25)return 6; if(t<28)return 8; return 10; }
@@ -110,7 +161,8 @@ function wx(c){
 }
 function lastDone(checks,id){ let b=null; for(const k of Object.keys(checks||{})){ if(k.endsWith("::"+id)){ const d=k.split("::")[0]; if(!b||d>b)b=d; } } return b; }
 function isDue(checks,task){ const l=lastDone(checks,task.id); if(!l)return true; const g=daysBetween(l,today());
-  if(task.freq==="daily")return g>=1; if(task.freq==="every3")return g>=3; if(task.freq==="weekly")return g>=7; return true; }
+  if(task.freq==="daily")return g>=1; if(task.freq==="every3")return g>=3; if(task.freq==="weekly")return g>=7;
+  if(task.freq==="every14")return g>=14; if(task.freq==="yearly")return g>=365; return true; }
 
 /* ---------- backend api ---------- */
 async function apiGetState(){ try{ const r=await fetch("/api/state"); const j=await r.json(); return j && Object.keys(j).length?j:null; }catch{ return null; } }
@@ -134,7 +186,12 @@ function Poolvagten(){
     let s=await apiGetState();
     if(!s){ s={ config:DEFAULT_CONFIG, checks:{}, log:[], readings:{}, plan:null, profiles:[], updatedAt:Date.now() }; await apiPutState(s); }
     if(!s.config.rates)s.config.rates=DEFAULT_CONFIG.rates;
+    s.config.rates={...DEFAULT_CONFIG.rates,...s.config.rates};   // flet nye satser ind i gammel state
     if(s.config.autoPlan===undefined)s.config.autoPlan=true;
+    if(!s.config.system)s.config.system="oxygen";
+    if(!s.config.oxygenForm)s.config.oxygenForm="oxychock";
+    if(s.config.uvLamp===undefined)s.config.uvLamp=false;
+    if(!s.config.filterType)s.config.filterType="sand";
     if(!s.profiles)s.profiles=[];
     setState(s);
   })(); },[]);
@@ -163,7 +220,7 @@ function Poolvagten(){
   };
   const saveReading=(kind,value)=>{ if(!value)return; if(!me){ showToast("Vælg en profil først"); return; }
     mutate(s=>{ const readings={...s.readings,[kind]:{value,ts:Date.now(),initials:me}};
-      const log=[{id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${kind==="ph"?"pH":"aktiv ilt"}: ${value}${kind==="oxy"?" mg/l":""}`,initials:me},...(s.log||[])];
+      const log=[{id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${kind!=="ph"?" mg/l":""}`,initials:me},...(s.log||[])];
       return {...s,readings,log:log.slice(0,60)};
     });
     showToast("Måling gemt");
@@ -177,28 +234,42 @@ function Poolvagten(){
 
   const generatePlan=async()=>{ if(!state)return; setPlanErr(null); setPlanLoading(true);
     try{
-      const d=doses(cfg); const lastOxy=lastDone(state.checks,"oxy")||"ukendt"; let wxLines="";
+      const d=doses(cfg);
+      const mainId=mainDisinfectId(cfg);
+      const lastMain=lastDone(state.checks,mainId)||"ukendt";
+      const sysName = cfg.system==="chlorine"
+        ? "et KLOR-baseret system"
+        : (cfg.oxygenForm==="combitabs" ? "et KLORFRIT aktiv ilt-system med CombiTabs (Swim & Fun)" : "et KLORFRIT aktiv ilt-system (Swim & Fun OxyChock + Aktivator)");
+      const doseLine = cfg.system==="chlorine"
+        ? `Hold frit klor 1–3 mg/l (præcise klordoser er ikke konfigureret endnu — anbefal måling og justering, ikke faste gram). KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, frit klor 1–3 mg/l, cyanursyre under 80 ppm.`
+        : (cfg.oxygenForm==="combitabs"
+            ? `CombiTabs ${d.combiTabs} stk dagligt (1 pr. 3000 L). KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l. Klor-chok hver 14. dag i varme perioder.`
+            : `OxyChock ${d.oxy3} g + Aktivator ${d.akt3} ml hver 3. dag. KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l. Klor-chok hver 14. dag i varme perioder.`);
+      const uvLine = cfg.uvLamp ? "UV-LYS aktivt: kemiforbruget er reduceret (~40%), men mål stadig jævnligt; UV virker kun mens pumpen kører, så prioritér pumpetid. Mind om årligt pæreskift ved sæsonstart.\n" : "";
+      const filterName = ({sand:"sandfilter",glass:"filterglas",cartridge:"patronfilter",balls:"FilterBalls"})[cfg.filterType||"sand"];
+      let wxLines="";
       const recentExtras=(state.log||[]).filter(e=>e.extra && (Date.now()-e.ts)<4*86400000);
       let extraLines=""; if(recentExtras.length){ extraLines="EKSTRA DOSER GIVET FOR NYLIG (ud over de faste):\n"+recentExtras.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.extra.name}${e.extra.amount?` (${e.extra.amount})`:""}`).join("\n")+"\n"; }
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
-      const prompt=`Du er en erfaren dansk pool-tekniker. Lav en kort, konkret vedligeholdelsesplan for de næste dage for et KLORFRIT aktiv ilt-system (Swim & Fun OxyChock + Aktivator).
+      const prompt=`Du er en erfaren dansk pool-tekniker. Lav en kort, konkret vedligeholdelsesplan for de næste dage for ${sysName}.
 
-POOL: ${cfg.poolSize} liter. Sandfilterpumpe ${cfg.pumpCap} l/t. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
-FASTE DOSER: OxyChock ${d.oxy3} g + Aktivator ${d.akt3} ml hver 3. dag. KlarPool ${d.klarWeekly} ml ugentligt. Mål: pH 7,0–7,4, aktiv ilt 3–5 mg/l.
-SIDST GIVET OXYCHOCK: ${lastOxy}.
+POOL: ${cfg.poolSize} liter. Pumpe ${cfg.pumpCap} l/t. Filtertype: ${filterName}. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
+FASTE DOSER: ${doseLine}
+${uvLine}SIDST GIVET HOVEDDESINFEKTION: ${lastMain}.
 ${extraLines}VEJRUDSIGT:
 ${wxLines}
 Returnér KUN gyldig JSON, ingen markdown, ingen tekst udenom, præcis dette format:
 {"days":[{"date":"YYYY-MM-DD","weekday":"Tirsdag","weather":"24° klart","headline":"kort, maks 6 ord","actions":["punkt med dosis hvor relevant"],"tip":"én kort sætning","alert":"kort advarsel eller null"}]}
 
 REGLER:
-- Beregn selv hvilke dage OxyChock+Aktivator skal gives ud fra "sidst givet" + hver 3. dag.
-- temp > 22°C: anbefal hyppigere iltmåling, evt. ekstra halv dosis (${d.oxyDaily} g) og flere pumpetimer.
+- Beregn selv hvilke dage hoveddesinfektion skal gives ud fra "sidst givet" og intervallet (aktiv ilt OxyChock = hver 3. dag; CombiTabs og klor = dagligt tilsyn).
+- temp > 22°C: anbefal hyppigere måling, evt. ekstra dosis og flere pumpetimer.
 - nedbør > 3 mm: mind om pH-tjek efter regn.
 - vandfald JA: mind om at pH stiger, hav pH-Minus klar.
-- Hvis der er givet ekstra doser for nylig (se ovenfor): tag højde for det — anbefal ikke at gentage en chokbehandling samme dag, og nævn kort relevant opfølgning (fx mål aktiv ilt og pH dagen efter et chok).
+- Aktiv ilt-system: mind om klor-chok hver 14. dag i varme perioder.${cfg.uvLamp?"\n- UV aktivt: hold doser i den lave ende, men mål for at bekræfte.":""}
+- Hvis der er givet ekstra doser for nylig (se ovenfor): tag højde for det — anbefal ikke at gentage en chokbehandling samme dag, og nævn kort relevant opfølgning (fx mål dagen efter et chok).
 - 1–4 actions pr. dag. Dansk, venligt, kort. Sæt alert til null hvis intet særligt.`;
       const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
       const data=await r.json(); const clean=(data.text||"").replace(/```json|```/g,"").trim();
@@ -223,12 +294,13 @@ REGLER:
   const wToday=weather?wx(weather.weather_code[0]):null;
   const hot=tmax!=null?tmax>=22:manualWx==="hot";
   const rain=precip!=null?precip>=3:manualWx==="rain";
-  const hours=pumpHours(tmax);
+  const hours=pumpHours(tmax)+(cfg.uvLamp?2:0);
 
   const alerts=[];
-  if(hot)alerts.push({kind:"warn",icon:Sun,text:"Varmt vejr — alger og bakterier trives. Tjek iltniveau før badning, og overvej en ekstra halv dosis OxyChock i dag."});
+  if(hot)alerts.push({kind:"warn",icon:Sun,text:"Varmt vejr — alger og bakterier trives. Mål desinfektion før badning, og overvej en ekstra dosis i dag."});
   if(rain)alerts.push({kind:"info",icon:Droplets,text:"Regn i dag — regnvand skubber ofte pH. Tjek pH efter skybruddet."});
   if(cfg.useWaterfall)alerts.push({kind:"warn",icon:Waves,text:"Vandfald aktivt — luftningen hæver pH. Mål pH ekstra ofte og hav pH-Minus klar."});
+  if(cfg.uvLamp)alerts.push({kind:"info",icon:Sun,text:"UV-lys aktivt — kemiforbruget er sat ned, men mål stadig jævnligt. UV virker kun mens pumpen kører; skift pæren årligt."});
 
   return (
     <div style={{fontFamily:FONT,background:T.bg,color:T.ink,minHeight:"100vh"}}>
@@ -274,28 +346,24 @@ REGLER:
 
           <SectionTitle icon={Check} title="Skal gøres"/>
           <section style={{...card,padding:8}}>
-            {TASKS.map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
-              let dose=null; if(task.id==="oxy")dose=`${d.oxy3} g OxyChock + ${d.akt3} ml Aktivator`; if(task.id==="klar")dose=`${d.klarWeekly} ml KlarPool`;
-              return <TaskRow key={task.id} task={task} done={done} due={due} dose={dose} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
+            {buildTasks(cfg,d).map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
+              return <TaskRow key={task.id} task={task} done={done} due={due} dose={task.dose||null} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
             })}
           </section>
 
           <SectionTitle icon={Beaker} title="Hurtige målinger"/>
           <section style={{...card,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Reading label="pH" hint="7,0 – 7,4" placeholder="7,2" last={state.readings?.ph} onSave={v=>saveReading("ph",v)}/>
-            <Reading label="Aktiv ilt" hint="3 – 5 mg/l" placeholder="4" last={state.readings?.oxy} onSave={v=>saveReading("oxy",v)}/>
+            {cfg.system==="chlorine"
+              ? <Reading label="Frit klor" hint="1 – 3 mg/l" placeholder="2" last={state.readings?.klor} onSave={v=>saveReading("klor",v)}/>
+              : <Reading label="Aktiv ilt" hint="3 – 5 mg/l" placeholder="4" last={state.readings?.oxy} onSave={v=>saveReading("oxy",v)}/>}
           </section>
 
-          <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L`}/>
+          <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L${d.uv?" · UV":""}`}/>
           <section style={{...card,padding:0,overflow:"hidden"}}>
-            <DoseRow a="OxyChock + Aktivator" b="Hver 3. dag" c={`${d.oxy3} g + ${d.akt3} ml`} onLog={logExtra}/>
-            <DoseRow a="OxyChock (alt. dagligt)" b="Dagligt" c={`${d.oxyDaily} g`} onLog={logExtra}/>
-            <DoseRow a="KlarPool" b="Ugentligt" c={`${d.klarWeekly} ml`} onLog={logExtra}/>
-            <DoseRow a="FlokPool (uklart vand)" b="Efter behov" c={`${d.flokMin}–${d.flokMax} ml`} onLog={logExtra}/>
-            <DoseRow a="OxyChock chok (grønt vand)" b="Efter behov" c={`${d.oxyProblem} g`} onLog={logExtra}/>
-            <DoseRow a="Sæsonstart" b="Opstart" c={`${d.oxyStart} g + ${d.aktStart} ml`} onLog={logExtra} last/>
+            {buildDoseRows(cfg,d).map((r,i,arr)=><DoseRow key={r[0]} a={r[0]} b={r[1]} c={r[2]} onLog={logExtra} last={i===arr.length-1}/>)}
           </section>
-          <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.5}}>Tryk <b>+ Givet</b> for at registrere en ekstra dosis — den havner i loggen og tages med i næste plan. Opløs altid OxyChock i en spand vand først og hæld langs kanten. Justér pH før flokning. Brug dunkens låg som målebæger.</p>
+          <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.5}}>{d.uv?"UV-lys reducerer de løbende desinfektionsdoser (vejledende) — mål altid med strips for at bekræfte. ":""}Tryk <b>+ Givet</b> for at registrere en ekstra dosis — den havner i loggen og tages med i næste plan. Opløs altid granulat i en spand vand først og hæld langs kanten. Justér pH før flokning. Brug dunkens låg som målebæger.</p>
         </>}
 
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
@@ -450,9 +518,23 @@ function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(c
         <Field label="Breddegrad"><NumIn value={f.lat} step="0.0001" onChange={v=>set("lat",parseFloat(v)||0)}/></Field>
         <Field label="Længdegrad"><NumIn value={f.lng} step="0.0001" onChange={v=>set("lng",parseFloat(v)||0)}/></Field>
       </div>
+      <Field label="System">
+        <PillRow options={[["oxygen","Aktiv ilt"],["chlorine","Klor"]]} value={f.system||"oxygen"} onChange={v=>set("system",v)}/>
+      </Field>
+      {f.system!=="chlorine" && <Field label="Desinfektionsform">
+        <PillRow options={[["oxychock","OxyChock granulat"],["combitabs","CombiTabs"]]} value={f.oxygenForm||"oxychock"} onChange={v=>set("oxygenForm",v)}/>
+      </Field>}
+      {f.system==="chlorine" && <p style={{fontSize:11.5,color:T.sub,margin:"-4px 2px 12px",lineHeight:1.5}}>Klor-doseringer tilføjes når guiderne er lagt ind. pH, klar pool, flokning og målinger virker allerede.</p>}
+      <Field label="Filtertype">
+        <PillRow options={[["sand","Sand"],["glass","Glas"],["cartridge","Patron"],["balls","FilterBalls"]]} value={f.filterType||"sand"} onChange={v=>set("filterType",v)}/>
+      </Field>
       <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 2px",cursor:"pointer"}}>
         <input type="checkbox" checked={f.useWaterfall} onChange={e=>set("useWaterfall",e.target.checked)} style={{width:18,height:18,accentColor:T.teal}}/>
         <span style={{fontSize:14,fontWeight:600}}>Jeg bruger vandfald / dykpumpe</span>
+      </label>
+      <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 2px",cursor:"pointer",borderTop:`1px solid ${T.line}`}}>
+        <input type="checkbox" checked={!!f.uvLamp} onChange={e=>set("uvLamp",e.target.checked)} style={{width:18,height:18,accentColor:T.teal}}/>
+        <span style={{fontSize:14,fontWeight:600}}>Jeg har UV-filterlys</span>
       </label>
       <label style={{display:"flex",alignItems:"center",gap:10,padding:"10px 2px",cursor:"pointer",borderTop:`1px solid ${T.line}`}}>
         <input type="checkbox" checked={f.autoPlan!==false} onChange={e=>set("autoPlan",e.target.checked)} style={{width:18,height:18,accentColor:T.teal}}/>
@@ -468,7 +550,10 @@ function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(c
       <Field label="OxyChock g / dag (alt.)"><NumIn value={f.rates.oxyDailyPer10k} onChange={v=>setRate("oxyDailyPer10k",v)}/></Field>
       <Field label="Aktivator ml / 3 dage"><NumIn value={f.rates.aktPer10k} onChange={v=>setRate("aktPer10k",v)}/></Field>
       <Field label="KlarPool ml / uge"><NumIn value={f.rates.klarWeeklyPer10k} onChange={v=>setRate("klarWeeklyPer10k",v)}/></Field>
-      <p style={{fontSize:11.5,color:T.sub,margin:"6px 2px 0",lineHeight:1.5}}>Standardtallene følger Swim & Funs vejledning. Justér kun hvis din etikette siger noget andet.</p>
+      <Field label="pH-Minus g / 0,2 fald"><NumIn value={f.rates.phMinusPer10k} onChange={v=>setRate("phMinusPer10k",v)}/></Field>
+      <Field label="pH-Plus g / 0,2 stigning"><NumIn value={f.rates.phPlusPer10k} onChange={v=>setRate("phPlusPer10k",v)}/></Field>
+      <Field label="SeaKlear ml / 2.000 L (uge)"><NumIn value={f.rates.seaklearMlPer2000} onChange={v=>setRate("seaklearMlPer2000",v)}/></Field>
+      <p style={{fontSize:11.5,color:T.sub,margin:"6px 2px 0",lineHeight:1.5}}>Standardtallene følger Swim & Funs vejledning (pr. 10.000 L, undtagen SeaKlear pr. 2.000 L). Justér kun hvis din etikette siger noget andet.</p>
     </section>}
 
     <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
@@ -476,6 +561,14 @@ function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(c
   </>;
 }
 const Field=({label,children})=><div style={{marginBottom:12,flex:1}}><div style={{fontSize:12,fontWeight:600,color:T.sub,marginBottom:5}}>{label}</div>{children}</div>;
+const PillRow=({options,value,onChange})=>(
+  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+    {options.map(([v,l])=>(
+      <button key={v} type="button" className="pv-btn" onClick={()=>onChange(v)}
+        style={{border:`1.5px solid ${value===v?T.teal:T.line}`,background:value===v?T.teal:"#fff",color:value===v?"#fff":T.ink,borderRadius:999,padding:"8px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:FONT}}>{l}</button>
+    ))}
+  </div>
+);
 const NumIn=({value,onChange,step})=><input className="pv-in" type="number" value={value} step={step} onChange={e=>onChange(e.target.value)} style={inStyle}/>;
 const TxtIn=({value,onChange})=><input className="pv-in" value={value} onChange={e=>onChange(e.target.value)} style={inStyle}/>;
 

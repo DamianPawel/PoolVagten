@@ -90,7 +90,7 @@ async def lifespan(_: FastAPI):
         await _pool.close()
 
 
-app = FastAPI(title="Poolvagten", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Poolvagten", version="1.1.0", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #

@@ -3,12 +3,13 @@
 ## Nu
 - [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
 - [ ] Tilføj husstandens profiler (initialer).
-- [ ] Bekræft KlarPool ugentlig dosis mod dunkens etikette; ret `klarWeeklyPer10k` hvis nødvendigt.
+- [ ] **Klor-doser:** indtast løbende klor + Klor Starter-chok når guiderne er modtaget (placeholdere står "doser følger" i UI'et og prompten).
 
 ## Snart
 - [ ] "Sæsonstart"-knap der nulstiller cyklus og sætter opstartsdoser.
 - [ ] Lille badge på fanen "I dag" med antal forfaldne opgaver.
 - [ ] Eksportér log til CSV (til ReRise BI-vanen).
+- [ ] Cyanursyre-måling (klor-system) som tredje hurtig-måling.
 
 ## Måske / nice-to-have
 - [ ] Push-/mail-påmindelse om morgenen (kræver baggrundsjob — vej op mod "hold det simpelt").
@@ -22,6 +23,10 @@
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Dual-system (aktiv ilt / klor) + desinfektionsform (OxyChock granulat / CombiTabs) som valg i Indstillinger.
+- [x] UV-filterlys-flag: reducerer løbende desinfektionsdoser (~×0,6), +2 pumpetimer, årlig pæreskift-opgave.
+- [x] Filtertype (sand/glas/patron/FilterBalls) styrer returskyl-/rens-opgave; flokning matcher.
+- [x] Udvidet produktkatalog + kildebekræftede doser (pH-Minus 150 g/0,2, pH-Plus 100 g/0,2, Metal Out 0,3–0,5 L, SeaKlear 25 ml/2.000 L, CombiTabs 1/3.000 L). KlarPool-uge bekræftet til 0,5 dl/10.000 L. Opstart rettet til 100 g OxyChock.
 - [x] Ekstra dosis-registrering under "Dine doser" (+ Givet) — havner i log og medtages i AI-planen.
 - [x] Adresse-opslag i Indstillinger (Nominatim) der udfylder koordinater.
 - [x] Oprettet privat GitHub-repo og deployet på Railway med Postgres (`/api/health` → `{"ok":true,"db":true}`).

@@ -2,6 +2,16 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Dual-system, UV & udvidet katalog (v1.1.0)
+- **Dual-system:** `config.system` ("oxygen"/"chlorine") styrer trin 2-produkter, måleværdier (aktiv ilt 3–5 mg/l vs frit klor 1–3 mg/l) og AI-prompten. Klor-doser er placeholdere ("doser følger") indtil guiderne modtages — resten (pH, klar pool, flokning, målinger) virker for begge.
+- **Desinfektionsform:** `config.oxygenForm` ("oxychock"/"combitabs"). CombiTabs doseres 1 tablet/3.000 L dagligt.
+- **UV-filterlys:** `config.uvLamp`. Reducerer løbende desinfektion (×0,6, vejledende), lægger +2 pumpetimer på, og tilføjer en årlig "Skift UV-pære"-opgave (ny `yearly`-frekvens). Rører ikke pH; mind om at måle.
+- **Filtertype:** `config.filterType` (sand/glass/cartridge/balls) styrer returskyl-/rens-opgaven og flokningsmetoden.
+- **Katalog + doser kildebekræftet** mod Swim & Funs produktsider/artikler: pH-Minus 150 g/0,2-fald, pH-Plus 100 g/0,2-stigning, Metal Out 0,3–0,5 L, SeaKlear 25 ml/2.000 L (ugentligt), FlokPool 50–100 ml, KlarPool ugentlig **bekræftet** til 0,5 dl/10.000 L. **Rettelse:** opstart er 100 g OxyChock + 100 ml Aktivator pr. 10.000 L (ikke 200 g — de ~200–250 g er chok/problemvand).
+- Tjekliste, dosistabel og hurtig-målinger bygges nu dynamisk ud fra config (`buildTasks`/`buildDoseRows`). Ny tjekliste-opgave: klor-chok hver 14. dag (aktiv ilt-pools, varme perioder).
+- Datamodel uændret i form: stadig ét JSON-dokument; kun nye `config`-felter (migreres ind ved load med defaults). Ingen ny Python-pakke. Inden for self-directed.
+- Verificeret: JSX kompilerer (Babel classic runtime), `/api/health` ok, frontend serveres, gammel state migreres klientside.
+
 ## 2026-06-23 — Feature: registrér ekstra doser
 - "Dine doser": hver række har nu en valgfri **+ Givet**-knap, der logger en ekstra dosis (med profil) — fx ekstra OxyChock-chok 400 g.
 - Datamodel: ingen ny top-level — ekstra doser gemmes som almindelige log-poster med et `extra:{name,amount}`-mærke (holder "ét JSON-dokument").
