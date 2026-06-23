@@ -166,4 +166,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse(str(STATIC / "index.html"))
+    # no-cache: browseren skal altid revalidere index.html mod serverens etag,
+    # så et nyt deploy slår igennem med det samme (ingen blank side fra gammel cache).
+    return FileResponse(str(STATIC / "index.html"), headers={"Cache-Control": "no-cache"})
