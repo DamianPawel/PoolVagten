@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+pool_state.json
+.DS_Store
