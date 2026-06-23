@@ -2,6 +2,14 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Live på Railway
+- Oprettede privat GitHub-repo `DamianPawel/PoolVagten` og pushede scaffold (første commit).
+- Deployede `web`-service på Railway + tilføjede PostgreSQL-plugin.
+- Koblede DB på via Variable Reference `${{Postgres.DATABASE_URL}}` (intern URL, ikke kopieret streng — holder sig selv opdateret).
+- Sat `ANTHROPIC_API_KEY` og `CLAUDE_MODEL` på `web`-servicen.
+- Bekræftet: `GET /api/health` → `{"ok":true,"db":true}`. App oppe og forbundet til Postgres.
+- Mangler stadig: bekræfte delt status mellem to telefoner.
+
 ## 2026-06-23 — Initialt scaffold (v1.0.0)
 - Oprettede projektet efter bootstrap-standarden (microservice / LITE / self-directed).
 - `app/main.py`: FastAPI med `/api/state` (GET/PUT), `/api/weather` (Open-Meteo proxy), `/api/plan` (Claude proxy), `/api/health`, samt static-servering af frontend.

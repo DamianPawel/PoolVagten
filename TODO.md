@@ -1,7 +1,7 @@
 # TODO.md
 
 ## Nu
-- [ ] Deploy til Railway og bekræft delt status mellem to telefoner.
+- [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
 - [ ] Tilføj husstandens profiler (initialer).
 - [ ] Bekræft KlarPool ugentlig dosis mod dunkens etikette; ret `klarWeeklyPer10k` hvis nødvendigt.
 
@@ -17,6 +17,7 @@
 - [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
 
 ## Gjort
+- [x] Oprettet privat GitHub-repo og deployet på Railway med Postgres (`/api/health` → `{"ok":true,"db":true}`).
 - [x] FastAPI-service: state, vejr-proxy, plan-proxy, static.
 - [x] Frontend portet fra artifact til standalone (React via CDN).
 - [x] Profiler + initialer.
