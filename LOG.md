@@ -2,6 +2,12 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Fix: blank side (Babel 8 brød frontend)
+- Symptom: deployet kørte (`/api/health` ok), men `/` viste blank side. Konsol: `SyntaxError: Cannot use import statement outside a module` i Babels `transformScriptTags`.
+- Rod-årsag: CDN-scripts var upinnede. unpkg serverede nu **Babel 8.0.2**, hvor `preset-react` skiftede default til "automatic" JSX-runtime → indsætter `import { jsx } from "react/jsx-runtime"` i det transformerede (klassiske) script → fejler. Ikke en netværks- eller udvidelsesfejl (bekræftet i inkognito).
+- Fix: pinnede `react@18.3.1`, `react-dom@18.3.1` og `@babel/standalone@7.29.7` (classic runtime, `React.createElement`). Ingen kodeændring i selve appen.
+- Læring: pin altid CDN-versioner — "intet byggetrin" gør os afhængige af, at CDN'ets defaults ikke ændrer sig.
+
 ## 2026-06-23 — Live på Railway
 - Oprettede privat GitHub-repo `DamianPawel/PoolVagten` og pushede scaffold (første commit).
 - Deployede `web`-service på Railway + tilføjede PostgreSQL-plugin.
