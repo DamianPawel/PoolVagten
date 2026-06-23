@@ -25,6 +25,8 @@ from pydantic import BaseModel
 DATABASE_URL = os.getenv("DATABASE_URL")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+# Reservemodel hvis den primære er overbelastet (529). Haiku er hurtigere/mindre presset.
+FALLBACK_MODEL = os.getenv("CLAUDE_FALLBACK_MODEL", "claude-haiku-4-5-20251001")
 
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
@@ -164,32 +166,42 @@ class PlanRequest(BaseModel):
 async def plan(req: PlanRequest) -> dict:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY er ikke sat på serveren.")
-    payload = {
-        "model": MODEL,
-        "max_tokens": 1000,
-        "messages": [{"role": "user", "content": req.prompt}],
-    }
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
     }
-    # Anthropic kan svare 529 (overloaded) / 503 / 429 i korte perioder.
-    # Prøv igen med stigende ventetid før vi giver op.
+    # Anthropic kan svare 529 (overloaded) / 503 / 429 i korte perioder. Vi prøver
+    # den primære model med backoff; er den vedvarende overbelastet, falder vi
+    # tilbage til reservemodellen, så planen stadig kan lægges.
+    overloaded = (429, 503, 529)
+    models = [MODEL] + ([FALLBACK_MODEL] if FALLBACK_MODEL and FALLBACK_MODEL != MODEL else [])
+    resp = None
     async with httpx.AsyncClient(timeout=45) as client:
-        for attempt in range(4):
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages", headers=headers, json=payload
-            )
+        for model in models:
+            payload = {
+                "model": model,
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": req.prompt}],
+            }
+            for attempt in range(3):
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages", headers=headers, json=payload
+                )
+                if resp.status_code == 200 or resp.status_code not in overloaded:
+                    break
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))  # 1,5s · 3s
             if resp.status_code == 200:
                 break
-            if resp.status_code in (429, 503, 529) and attempt < 3:
-                await asyncio.sleep(1.5 * (attempt + 1))  # 1,5s · 3s · 4,5s
-                continue
-            # Vedvarende fejl (eller forbigående der ikke gav sig) — vis årsagen.
-            raise HTTPException(
-                502, f"Anthropic {resp.status_code} (model={MODEL}): {resp.text[:400]}"
-            )
+            if resp.status_code not in overloaded:
+                # Ægte fejl (ukendt model, ugyldig nøgle, tom kredit ...) — vis årsagen.
+                raise HTTPException(
+                    502, f"Anthropic {resp.status_code} (model={model}): {resp.text[:400]}"
+                )
+            # ellers: overbelastet → prøv næste model
+    if resp is None or resp.status_code != 200:
+        raise HTTPException(503, "AI-tjenesten er overbelastet lige nu. Prøv igen om et øjeblik.")
     data = resp.json()
     text = "".join(
         block.get("text", "")
