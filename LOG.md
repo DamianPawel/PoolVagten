@@ -2,6 +2,10 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Oprydning + nyt domæne
+- Slettede overflødig `poolvagten.jsx` (oprindelig artifact) — hele UI'et bor i `app/static/index.html`, og intet refererede til filen.
+- Nyt, kortere public domæne: **poolvagten.up.railway.app** (det gamle `web-production-6f6f1a…` blev fjernet, hvilket kortvarigt gav "Application not found" på den gamle adresse — ikke en kodefejl).
+
 ## 2026-06-23 — Feature: adresse-opslag i Indstillinger
 - Tilføjede `/api/geocode?q=` — proxy til **Nominatim (OpenStreetMap)**: fri-tekst-adresse → bredde/længdegrad. Gratis, ingen nøgle, gade-niveau (Open-Meteos geokoder kan kun stednavne).
 - Begrundelse (gylden regel 1): ny ekstern tjeneste, men ingen ny Python-pakke og ingen hemmelighed — fuldstændig samme mønster som det eksisterende vejr-proxy. Rører ikke stak/datamodel, derfor inden for self-directed.
