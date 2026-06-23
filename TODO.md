@@ -17,6 +17,7 @@
 - [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
 
 ## Gjort
+- [x] Adresse-opslag i Indstillinger (Nominatim) der udfylder koordinater.
 - [x] Oprettet privat GitHub-repo og deployet på Railway med Postgres (`/api/health` → `{"ok":true,"db":true}`).
 - [x] FastAPI-service: state, vejr-proxy, plan-proxy, static.
 - [x] Frontend portet fra artifact til standalone (React via CDN).

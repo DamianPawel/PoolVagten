@@ -126,6 +126,35 @@ async def weather(lat: float = 55.4486, lng: float = 10.6622) -> dict:
         return resp.json()
 
 
+@app.get("/api/geocode")
+async def geocode(q: str) -> dict:
+    """Slå en fri-tekst-adresse op → bredde/længdegrad via Nominatim (OpenStreetMap).
+
+    Gratis og uden nøgle, ligesom vejr-proxyen. Nominatim kræver en sigende
+    User-Agent. Gade-niveau, så man kan indtaste en fuld adresse i stedet for
+    selv at finde koordinater.
+    """
+    q = (q or "").strip()
+    if not q:
+        raise HTTPException(400, "Tom adresse.")
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": q, "format": "jsonv2", "limit": 1},
+            headers={"User-Agent": "Poolvagten/1.0 (husstands-pool-app)"},
+        )
+        resp.raise_for_status()
+        hits = resp.json()
+    if not hits:
+        raise HTTPException(404, "Adressen blev ikke fundet.")
+    hit = hits[0]
+    return {
+        "lat": float(hit["lat"]),
+        "lng": float(hit["lon"]),
+        "name": hit.get("display_name", q),
+    }
+
+
 class PlanRequest(BaseModel):
     prompt: str
 

@@ -2,6 +2,12 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Feature: adresse-opslag i Indstillinger
+- Tilføjede `/api/geocode?q=` — proxy til **Nominatim (OpenStreetMap)**: fri-tekst-adresse → bredde/længdegrad. Gratis, ingen nøgle, gade-niveau (Open-Meteos geokoder kan kun stednavne).
+- Begrundelse (gylden regel 1): ny ekstern tjeneste, men ingen ny Python-pakke og ingen hemmelighed — fuldstændig samme mønster som det eksisterende vejr-proxy. Rører ikke stak/datamodel, derfor inden for self-directed.
+- Frontend: adressefelt + "Find"-knap i Indstillinger udfylder lokation + koordinater automatisk; felterne kan stadig rettes manuelt.
+- Note: profilvalg gemmes allerede per-enhed i `localStorage` (`pool:me`) — bekræftet i koden; ingen ændring nødvendig.
+
 ## 2026-06-23 — Fix: blank side (Babel 8 brød frontend)
 - Symptom: deployet kørte (`/api/health` ok), men `/` viste blank side. Konsol: `SyntaxError: Cannot use import statement outside a module` i Babels `transformScriptTags`.
 - Rod-årsag: CDN-scripts var upinnede. unpkg serverede nu **Babel 8.0.2**, hvor `preset-react` skiftede default til "automatic" JSX-runtime → indsætter `import { jsx } from "react/jsx-runtime"` i det transformerede (klassiske) script → fejler. Ikke en netværks- eller udvidelsesfejl (bekræftet i inkognito).

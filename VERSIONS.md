@@ -13,6 +13,7 @@
 - Frontend: React 18.3.1 + ReactDOM 18.3.1 + @babel/standalone **7.29.7** via unpkg CDN (pinnede versioner — Babel 8 bruger automatic JSX-runtime og bryder in-browser-transformen)
 - AI-model: `claude-sonnet-4-6` (override via `CLAUDE_MODEL`)
 - Vejr: Open-Meteo forecast API (ingen nøgle)
+- Geokodning: Nominatim / OpenStreetMap (ingen nøgle) — adresse → koordinater
 
 ## Doseringsstandarder (Swim & Fun, aktiv ilt-system)
 Tal pr. 10.000 liter. Skaleres lineært med poolstørrelse i appen.

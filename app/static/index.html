@@ -414,12 +414,27 @@ function LogView({log}){ return <>
   )}
 </>; }
 function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
+  const [addr,setAddr]=useState(""); const [geoBusy,setGeoBusy]=useState(false); const [geoErr,setGeoErr]=useState(null);
   const set=(k,v)=>setF(s=>({...s,[k]:v})); const setRate=(k,v)=>setF(s=>({...s,rates:{...s.rates,[k]:parseFloat(v)||0}})); const save=()=>{ onSave(f); showToast("Gemt"); };
+  const findAddr=async()=>{ const q=addr.trim(); if(!q)return; setGeoBusy(true); setGeoErr(null);
+    try{ const r=await fetch(`/api/geocode?q=${encodeURIComponent(q)}`); if(!r.ok)throw 0; const d=await r.json();
+      setF(s=>({...s,lat:+(+d.lat).toFixed(5),lng:+(+d.lng).toFixed(5),locationName:(d.name||"").split(",").slice(0,2).join(",").trim()||s.locationName}));
+      showToast("Koordinater fundet");
+    }catch{ setGeoErr("Kunne ikke finde adressen. Gør den mere præcis (vej, nr., by)."); }
+    finally{ setGeoBusy(false); } };
   return <>
     <SectionTitle icon={Settings} title="Indstillinger"/>
     <section style={card}>
       <Field label="Poolstørrelse (liter)"><NumIn value={f.poolSize} onChange={v=>set("poolSize",parseInt(v)||0)}/></Field>
       <Field label="Pumpekapacitet (liter/time)"><NumIn value={f.pumpCap} onChange={v=>set("pumpCap",parseInt(v)||0)}/></Field>
+      <Field label="Find via adresse">
+        <div style={{display:"flex",gap:8}}>
+          <input className="pv-in" value={addr} onChange={e=>setAddr(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); findAddr(); } }} placeholder="Fx Vestergade 12, 5000 Odense" style={{...inStyle,flex:1}}/>
+          <button className="pv-btn" onClick={findAddr} disabled={geoBusy} style={{background:T.teal,color:"#fff",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,fontSize:14,cursor:geoBusy?"default":"pointer",fontFamily:FONT,whiteSpace:"nowrap",opacity:geoBusy?0.6:1}}>{geoBusy?"Søger…":"Find"}</button>
+        </div>
+      </Field>
+      {geoErr&&<p style={{fontSize:12,color:T.danger,margin:"-6px 2px 8px",lineHeight:1.45}}>{geoErr}</p>}
+      <p style={{fontSize:11.5,color:T.sub,margin:"-4px 2px 12px",lineHeight:1.5}}>Indtast din adresse og tryk Find — så udfyldes lokation og koordinater automatisk. Du kan også rette dem manuelt herunder.</p>
       <Field label="Lokation (navn)"><TxtIn value={f.locationName} onChange={v=>set("locationName",v)}/></Field>
       <div style={{display:"flex",gap:10}}>
         <Field label="Breddegrad"><NumIn value={f.lat} step="0.0001" onChange={v=>set("lat",parseFloat(v)||0)}/></Field>
