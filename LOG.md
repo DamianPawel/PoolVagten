@@ -2,6 +2,10 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Log: dedup + slet enkelt post
+- Dedup: ny `addLogEntry` slår identiske hændelser (samme person+label) sammen inden for 90 sek. — bruges i `toggleTask`, `saveReading`, `logExtra`. Stopper dubletter fra fluebens-fjern/sæt og dobbelt-tryk.
+- Slet: hver log-post har nu en to-trins **× → Slet?**-knap (auto-fortryd efter 3 sek.), `deleteLog` filtrerer posten ud. Rydder også gamle dubletter.
+
 ## 2026-06-23 — Log grupperet per dag (foldbar)
 - `LogView` grupperer nu hændelser per dato i foldbare sektioner ("I dag", "I går", ellers "Ugedag DD/MM") med antal hændelser; dagens sektion er åben som standard.
 - Inde i hver dag vises hvem (initialer) + hvad + klokkeslæt. Nye hjælpere `dayHeading`/`clockTime`.

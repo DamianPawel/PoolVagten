@@ -161,6 +161,8 @@ function lastDone(checks,id){ let b=null; for(const k of Object.keys(checks||{})
 function isDue(checks,task){ const l=lastDone(checks,task.id); if(!l)return true; const g=daysBetween(l,today());
   if(task.freq==="daily")return g>=1; if(task.freq==="every3")return g>=3; if(task.freq==="weekly")return g>=7;
   if(task.freq==="every14")return g>=14; if(task.freq==="monthly")return g>=30; if(task.freq==="yearly")return g>=365; return true; }
+/* Tilføj log-post, men slå identiske (samme person+label) sammen inden for 90 sek. */
+function addLogEntry(log,entry){ const dup=(log||[]).some(e=>e.label===entry.label&&e.initials===entry.initials&&Math.abs(entry.ts-e.ts)<90000); return dup?(log||[]):[entry,...(log||[])].slice(0,60); }
 
 /* ---------- backend api ---------- */
 async function apiGetState(){ try{ const r=await fetch("/api/state"); const j=await r.json(); return j && Object.keys(j).length?j:null; }catch{ return null; } }
@@ -207,25 +209,27 @@ function Poolvagten(){
   const saveMe=v=>{ const u=(v||"").toUpperCase().slice(0,4).trim(); setMe(u); try{ localStorage.setItem("pool:me",u); }catch{} };
   const addProfile=(name,initials)=>{ const p={id:Math.random().toString(36).slice(2),name:(name||"").trim(),initials:(initials||"").toUpperCase().slice(0,4).trim()}; if(!p.initials)return; mutate(s=>({...s,profiles:[...(s.profiles||[]),p]})); saveMe(p.initials); };
   const removeProfile=id=>mutate(s=>({...s,profiles:(s.profiles||[]).filter(p=>p.id!==id)}));
+  const deleteLog=id=>mutate(s=>({...s,log:(s.log||[]).filter(e=>e.id!==id)}));
 
   const toggleTask=(taskId,label)=>{ if(!me){ showToast("Vælg en profil først"); return; }
     const key=`${today()}::${taskId}`;
-    mutate(s=>{ const checks={...s.checks}; const log=[...(s.log||[])];
-      if(checks[key]){ delete checks[key]; }
-      else { checks[key]={initials:me,ts:Date.now()}; log.unshift({id:Math.random().toString(36).slice(2),ts:Date.now(),label,initials:me}); }
-      return {...s,checks,log:log.slice(0,60)};
+    mutate(s=>{ const checks={...s.checks};
+      if(checks[key]){ delete checks[key]; return {...s,checks}; }
+      checks[key]={initials:me,ts:Date.now()};
+      const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label,initials:me};
+      return {...s,checks,log:addLogEntry(s.log,entry)};
     });
   };
   const saveReading=(kind,value)=>{ if(!value)return; if(!me){ showToast("Vælg en profil først"); return; }
     mutate(s=>{ const readings={...s.readings,[kind]:{value,ts:Date.now(),initials:me}};
-      const log=[{id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${kind!=="ph"?" mg/l":""}`,initials:me},...(s.log||[])];
-      return {...s,readings,log:log.slice(0,60)};
+      const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${kind!=="ph"?" mg/l":""}`,initials:me};
+      return {...s,readings,log:addLogEntry(s.log,entry)};
     });
     showToast("Måling gemt");
   };
   const logExtra=(name,amount)=>{ if(!me){ showToast("Vælg en profil først"); return; }
-    mutate(s=>{ const log=[{id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Ekstra dosis: ${name}${amount?` · ${amount}`:""}`,initials:me,extra:{name,amount}},...(s.log||[])];
-      return {...s,log:log.slice(0,60)};
+    mutate(s=>{ const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Ekstra dosis: ${name}${amount?` · ${amount}`:""}`,initials:me,extra:{name,amount}};
+      return {...s,log:addLogEntry(s.log,entry)};
     });
     showToast("Ekstra dosis registreret");
   };
@@ -364,7 +368,7 @@ REGLER:
         </>}
 
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
-        {tab==="log" && <LogView log={state.log||[]}/>}
+        {tab==="log" && <LogView log={state.log||[]} onDelete={deleteLog}/>}
         {tab==="settings" && <SettingsView cfg={cfg} onSave={c=>mutate(s=>({...s,config:c}))} showToast={showToast}
           onReset={()=>mutate(s=>({...s,checks:{},log:[],readings:{},plan:null}))}/>}
       </div>
@@ -481,11 +485,13 @@ function dayHeading(ds){
   return `${WEEKDAYS[dt.getDay()]} ${pad(D)}/${pad(M)}`;
 }
 function clockTime(ts){ const d=new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-function LogView({log}){
+function LogView({log,onDelete}){
   const groups=[]; const idx={};
   for(const e of log){ const ds=dateStr(new Date(e.ts)); if(idx[ds]===undefined){ idx[ds]=groups.length; groups.push({ds,items:[]}); } groups[idx[ds]].items.push(e); }
   const [open,setOpen]=useState({[today()]:true});
+  const [confirmDel,setConfirmDel]=useState(null);
   const toggle=ds=>setOpen(o=>({...o,[ds]:!o[ds]}));
+  const askDelete=id=>{ if(confirmDel===id){ onDelete(id); setConfirmDel(null); } else { setConfirmDel(id); setTimeout(()=>setConfirmDel(c=>c===id?null:c),3000); } };
   return <>
     <SectionTitle icon={History} title="Hvem gjorde hvad"/>
     {groups.length===0?(
@@ -503,6 +509,7 @@ function LogView({log}){
               <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px 10px 16px",borderBottom:`1px solid ${T.line}`}}>
                 <div style={{width:32,height:32,borderRadius:10,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{e.initials}</div>
                 <div style={{flex:1,minWidth:0}}><div style={{fontSize:13.5,fontWeight:600}}>{e.label}</div><div style={{fontSize:11.5,color:T.sub}}>{clockTime(e.ts)}</div></div>
+                <button className="pv-btn" onClick={()=>askDelete(e.id)} title="Slet" style={{background:confirmDel===e.id?T.dangerBg:"none",border:"none",cursor:"pointer",color:T.danger,fontSize:confirmDel===e.id?12:18,fontWeight:confirmDel===e.id?700:400,lineHeight:1,padding:confirmDel===e.id?"6px 9px":"4px 8px",borderRadius:8,flexShrink:0,fontFamily:FONT,whiteSpace:"nowrap"}}>{confirmDel===e.id?"Slet?":"×"}</button>
               </div>
             ))}
           </div>;

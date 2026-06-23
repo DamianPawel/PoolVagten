@@ -18,11 +18,12 @@
 - [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
 - [ ] Ekstra dosis: mulighed for at indtaste egen mængde (i stedet for den faste).
 - [ ] Vis dagens ekstra doser som små chips på "I dag"-fanen.
-- [ ] "Fortryd" på enkelte log-poster (slet en fejl-registrering).
 - [ ] Lille trend-graf over pH/aktiv ilt over tid.
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Log grupperet per dag (foldbar) + dedup af identiske hændelser + slet enkelt post.
+- [x] Tjekliste: "Børst siderne" og "Støvsug bunden" som to opgaver; FilterBalls behandles som sandfilter (backwash + månedlig spuling).
 - [x] Dual-system (aktiv ilt / klor) + desinfektionsform (OxyChock granulat / CombiTabs) som valg i Indstillinger.
 - [x] UV-filterlys-flag: reducerer løbende desinfektionsdoser (~×0,6), +2 pumpetimer, årlig pæreskift-opgave.
 - [x] Filtertype (sand/glas/patron/FilterBalls) styrer returskyl-/rens-opgave; flokning matcher.
