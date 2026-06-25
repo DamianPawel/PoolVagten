@@ -22,6 +22,10 @@
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Opfølgning på behandlinger (Ja/Nej efter 2 dage, med i AI-planen).
+- [x] Lokale doseringsforslag ud fra målinger (pH/ilt/klor vs. mål + satser).
+- [x] "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt.
+- [x] Delt spørgechat (/api/chat) der kender poolens data.
 - [x] Log grupperet per dag (foldbar) + dedup af identiske hændelser + slet enkelt post.
 - [x] Tjekliste: "Børst siderne" og "Støvsug bunden" som to opgaver; FilterBalls behandles som sandfilter (backwash + månedlig spuling).
 - [x] Dual-system (aktiv ilt / klor) + desinfektionsform (OxyChock granulat / CombiTabs) som valg i Indstillinger.

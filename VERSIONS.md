@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.2.0** (2026-06-23) — opfølgning på behandlinger (Ja/Nej efter 2 dage), lokale doseringsforslag ud fra målinger, "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt, og delt spørgechat (/api/chat) der kender poolens data.
 **1.1.0** (2026-06-23) — dual-system (aktiv ilt/klor), desinfektionsform (OxyChock/CombiTabs), UV-filterlys, filtertype, udvidet + kildebekræftet produktkatalog.
 **1.0.0** (2026-06-23) — første scaffold: state-API, vejr- og plan-proxy, standalone frontend, profiler, auto-plan.
 

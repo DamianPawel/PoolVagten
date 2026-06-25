@@ -61,6 +61,7 @@ const Sun = ic(<><circle cx="12" cy="12" r="4" /><path d="M12 4V2M12 22v-2M4 12H
 const MapPin = ic(<><path d="M12 22s7-7 7-12a7 7 0 1 0-14 0c0 5 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>);
 const ChevronDown = ic(<path d="M6 9l6 6 6-6" />);
 const Home = ic(<><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /></>);
+const MessageCircle = ic(<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-4-1L3 20l1.1-4.9A8.4 8.4 0 1 1 21 11.5z" />);
 
 /* ---------- defaults ---------- */
 const DEFAULT_CONFIG = {
@@ -71,6 +72,9 @@ const DEFAULT_CONFIG = {
            phMinusPer10k:150, phPlusPer10k:100, metalMinMlPer10k:300, metalMaxMlPer10k:500, seaklearMlPer2000:25 },
 };
 const FREQ_LABEL = { daily:"Dagligt", every3:"Hver 3. dag", weekly:"Ugentligt", every14:"Hver 14. dag", monthly:"Månedligt", yearly:"Årligt" };
+/* Frekvens → gruppe i "Skal gøres" */
+const FREQ_BUCKET = { daily:"Dagligt", every3:"Dagligt", weekly:"Ugentligt", every14:"Ugentligt", monthly:"Månedligt", yearly:"Årligt" };
+const BUCKET_ORDER = ["Dagligt","Ugentligt","Månedligt","Årligt"];
 const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor" };
 const SYSTEMS = { oxygen:"Aktiv ilt", chlorine:"Klor" };
 const FILTERS = { sand:"Sandfilter", glass:"Filterglas", cartridge:"Patronfilter", balls:"FilterBalls" };
@@ -163,6 +167,26 @@ function isDue(checks,task){ const l=lastDone(checks,task.id); if(!l)return true
   if(task.freq==="every14")return g>=14; if(task.freq==="monthly")return g>=30; if(task.freq==="yearly")return g>=365; return true; }
 /* Tilføj log-post, men slå identiske (samme person+label) sammen inden for 90 sek. */
 function addLogEntry(log,entry){ const dup=(log||[]).some(e=>e.label===entry.label&&e.initials===entry.initials&&Math.abs(entry.ts-e.ts)<90000); return dup?(log||[]):[entry,...(log||[])].slice(0,60); }
+function num(v){ const n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?null:n; }
+/* Lokale doseringsforslag ud fra seneste måling og JERES satser (ingen AI). */
+function measureSuggestions(cfg, readings, d){
+  const out=[]; const r=readings||{};
+  const ph=num(r.ph&&r.ph.value);
+  if(ph!=null){
+    if(ph>7.4){ const g=Math.max(1,Math.round(d.phMinus*(ph-7.2)/0.2)); out.push({kind:"warn",text:`pH er ${r.ph.value} (mål 7,0–7,4). For højt — tilsæt ca. ${g} g pH-Minus, kør pumpen, og mål igen efter et par timer.`}); }
+    else if(ph<7.0){ const g=Math.max(1,Math.round(d.phPlus*(7.2-ph)/0.2)); out.push({kind:"warn",text:`pH er ${r.ph.value} (mål 7,0–7,4). For lavt — tilsæt ca. ${g} g pH-Plus, kør pumpen, og mål igen efter et par timer.`}); }
+  }
+  if(cfg.system!=="chlorine"){
+    const ox=num(r.oxy&&r.oxy.value);
+    if(ox!=null){ if(ox<3) out.push({kind:"warn",text:`Aktiv ilt er ${r.oxy.value} mg/l (mål 3–5). Lavt — giv en ekstra dosis OxyChock (~${d.oxyDaily} g) og kør pumpen længere i dag.`});
+      else if(ox>5) out.push({kind:"info",text:`Aktiv ilt er ${r.oxy.value} mg/l (mål 3–5). Højt — vent med mere ilt, og mål igen i morgen.`}); }
+  } else {
+    const kl=num(r.klor&&r.klor.value);
+    if(kl!=null){ if(kl<1) out.push({kind:"warn",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Lavt — tilsæt klor efter etiket og mål igen.`});
+      else if(kl>3) out.push({kind:"info",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Højt — vent med mere, og bad først når det er faldet.`}); }
+  }
+  return out;
+}
 
 /* ---------- backend api ---------- */
 async function apiGetState(){ try{ const r=await fetch("/api/state"); const j=await r.json(); return j && Object.keys(j).length?j:null; }catch{ return null; } }
@@ -179,12 +203,13 @@ function Poolvagten(){
   const [planLoading,setPlanLoading]=useState(false);
   const [planErr,setPlanErr]=useState(null);
   const [toast,setToast]=useState(null);
+  const [chatBusy,setChatBusy]=useState(false);
   const stateRef=useRef(null); stateRef.current=state;
   const autoTriedRef=useRef(false);
 
   useEffect(()=>{ (async()=>{
     let s=await apiGetState();
-    if(!s){ s={ config:DEFAULT_CONFIG, checks:{}, log:[], readings:{}, plan:null, profiles:[], updatedAt:Date.now() }; await apiPutState(s); }
+    if(!s){ s={ config:DEFAULT_CONFIG, checks:{}, log:[], readings:{}, plan:null, profiles:[], followups:[], chat:[], updatedAt:Date.now() }; await apiPutState(s); }
     if(!s.config.rates)s.config.rates=DEFAULT_CONFIG.rates;
     s.config.rates={...DEFAULT_CONFIG.rates,...s.config.rates};   // flet nye satser ind i gammel state
     if(s.config.autoPlan===undefined)s.config.autoPlan=true;
@@ -193,6 +218,8 @@ function Poolvagten(){
     if(s.config.uvLamp===undefined)s.config.uvLamp=false;
     if(!s.config.filterType)s.config.filterType="sand";
     if(!s.profiles)s.profiles=[];
+    if(!s.followups)s.followups=[];
+    if(!s.chat)s.chat=[];
     setState(s);
   })(); },[]);
 
@@ -228,10 +255,46 @@ function Poolvagten(){
     showToast("Måling gemt");
   };
   const logExtra=(name,amount)=>{ if(!me){ showToast("Vælg en profil først"); return; }
+    const due=new Date(); due.setDate(due.getDate()+2); const dueDate=dateStr(due);
     mutate(s=>{ const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Ekstra dosis: ${name}${amount?` · ${amount}`:""}`,initials:me,extra:{name,amount}};
-      return {...s,log:addLogEntry(s.log,entry)};
+      const fu={id:Math.random().toString(36).slice(2),name,ts:Date.now(),due:dueDate};
+      return {...s,log:addLogEntry(s.log,entry),followups:[fu,...(s.followups||[])].slice(0,40)};
     });
-    showToast("Ekstra dosis registreret");
+    showToast("Registreret — jeg spørger til vandet om 2 dage");
+  };
+  const answerFollowup=(name,better)=>{
+    mutate(s=>{ const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Opfølgning: ${name} — vandet er ${better?"blevet bedre":"ikke bedre endnu"}`,initials:me||"",followup:{name,better}};
+      return {...s,log:addLogEntry(s.log,entry),followups:(s.followups||[]).filter(f=>!(f.name===name&&f.due<=today()))};
+    });
+    showToast("Tak — noteret");
+  };
+  const sendChat=async(text)=>{ const q=(text||"").trim(); if(!q||chatBusy)return;
+    const prev=(stateRef.current.chat||[]);
+    const userMsg={role:"user",content:q,ts:Date.now(),initials:me||""};
+    const history=[...prev,userMsg].map(m=>({role:m.role,content:m.content}));
+    await mutate(s=>({...s,chat:[...(s.chat||[]),userMsg].slice(-60)}));
+    setChatBusy(true);
+    try{
+      const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:buildChatSystem(),messages:history})});
+      if(!r.ok)throw 0; const data=await r.json();
+      const asMsg={role:"assistant",content:(data.text||"").trim()||"(tomt svar)",ts:Date.now()};
+      await mutate(s=>({...s,chat:[...(s.chat||[]),asMsg].slice(-60)}));
+    }catch(e){ console.error(e); showToast("Kunne ikke få svar lige nu — prøv igen"); }
+    finally{ setChatBusy(false); }
+  };
+  const buildChatSystem=()=>{
+    const dd=doses(cfg); const r=state.readings||{};
+    const sysName=cfg.system==="chlorine"?"klor":("aktiv ilt"+(cfg.oxygenForm==="combitabs"?" (CombiTabs)":""));
+    const rd=[]; if(r.ph)rd.push(`pH ${r.ph.value}`); if(r.oxy)rd.push(`aktiv ilt ${r.oxy.value} mg/l`); if(r.klor)rd.push(`frit klor ${r.klor.value} mg/l`);
+    const recent=(state.log||[]).slice(0,8).map(e=>`${dateStr(new Date(e.ts))} ${e.label}`).join("; ");
+    const tmax=weather?.temperature_2m_max?.[0];
+    return `Du er en hjælpsom dansk pool-ekspert for en husstand. Svar kort, konkret og venligt på dansk. Brug KUN doseringssatserne og retningslinjerne nedenfor — find ikke på andre tal. Mangler du en måling for at svare, så bed dem måle.
+POOL: ${cfg.poolSize} L, ${sysName}-system, filter: ${FILTERS[cfg.filterType]||cfg.filterType}, ${cfg.uvLamp?"UV-lys aktivt, ":""}vandfald: ${cfg.useWaterfall?"ja":"nej"}, lokation ${cfg.locationName}.
+MÅL: pH 7,0–7,4 (ideal 7,2)${cfg.system==="chlorine"?", frit klor 1–3 mg/l, cyanursyre under 80 ppm":", aktiv ilt 3–5 mg/l"}.
+SATSER (skaleret til poolen): OxyChock ${dd.oxy3} g + Aktivator ${dd.akt3} ml hver 3. dag; OxyChock dagligt alt. ${dd.oxyDaily} g; OxyChock chok ${dd.oxyProblem} g; pH-Minus ${dd.phMinus} g sænker pH 0,2; pH-Plus ${dd.phPlus} g hæver pH 0,2; KlarPool ${dd.klarWeekly} ml/uge; FlokPool ${dd.flokMin}–${dd.flokMax} ml; SeaKlear ${dd.seaklear} ml/uge; opstart ${dd.oxyStart} g + ${dd.aktStart} ml.
+SENESTE MÅLINGER: ${rd.join(", ")||"ingen"}. ${tmax!=null?`Vejr i dag ca. ${Math.round(tmax)}°C.`:""}
+SENESTE LOG: ${recent||"ingen"}.
+Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rigtige doser herfra og husk pH først.`;
   };
 
   const generatePlan=async()=>{ if(!state)return; setPlanErr(null); setPlanLoading(true);
@@ -252,6 +315,8 @@ function Poolvagten(){
       let wxLines="";
       const recentExtras=(state.log||[]).filter(e=>e.extra && (Date.now()-e.ts)<4*86400000);
       let extraLines=""; if(recentExtras.length){ extraLines="EKSTRA DOSER GIVET FOR NYLIG (ud over de faste):\n"+recentExtras.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.extra.name}${e.extra.amount?` (${e.extra.amount})`:""}`).join("\n")+"\n"; }
+      const recentFu=(state.log||[]).filter(e=>e.followup && (Date.now()-e.ts)<6*86400000);
+      let fuLines=""; if(recentFu.length){ fuLines="OPFØLGNING PÅ TIDLIGERE BEHANDLINGER:\n"+recentFu.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.followup.name} → ${e.followup.better?"vandet blev bedre":"INGEN bedring endnu"}`).join("\n")+"\n"; }
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
@@ -260,7 +325,7 @@ function Poolvagten(){
 POOL: ${cfg.poolSize} liter. Pumpe ${cfg.pumpCap} l/t. Filtertype: ${filterName}. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
 FASTE DOSER: ${doseLine}
 ${uvLine}SIDST GIVET HOVEDDESINFEKTION: ${lastMain}.
-${extraLines}VEJRUDSIGT:
+${extraLines}${fuLines}VEJRUDSIGT:
 ${wxLines}
 Returnér KUN gyldig JSON, ingen markdown, ingen tekst udenom, præcis dette format:
 {"days":[{"date":"YYYY-MM-DD","weekday":"Tirsdag","weather":"24° klart","headline":"kort, maks 6 ord","actions":["punkt med dosis hvor relevant"],"tip":"én kort sætning","alert":"kort advarsel eller null"}]}
@@ -271,6 +336,7 @@ REGLER:
 - nedbør > 3 mm: mind om pH-tjek efter regn.
 - vandfald JA: mind om at pH stiger, hav pH-Minus klar.${cfg.uvLamp?"\n- UV aktivt: hold doser i den lave ende, men mål for at bekræfte.":""}
 - Hvis der er givet ekstra doser for nylig (se ovenfor): tag højde for det — anbefal ikke at gentage en chokbehandling samme dag, og nævn kort relevant opfølgning (fx mål dagen efter et chok).
+- Hvis en opfølgning viser INGEN bedring: foreslå næste skridt (fx flokning efter KlarPool, justér pH, eller et chok) i stedet for at gentage det samme.
 - 1–4 actions pr. dag. Dansk, venligt, kort. Sæt alert til null hvis intet særligt.`;
       const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
       const data=await r.json(); const clean=(data.text||"").replace(/```json|```/g,"").trim();
@@ -302,6 +368,9 @@ REGLER:
   if(rain)alerts.push({kind:"info",icon:Droplets,text:"Regn i dag — regnvand skubber ofte pH. Tjek pH efter skybruddet."});
   if(cfg.useWaterfall)alerts.push({kind:"warn",icon:Waves,text:"Vandfald aktivt — luftningen hæver pH. Mål pH ekstra ofte og hav pH-Minus klar."});
   if(cfg.uvLamp)alerts.push({kind:"info",icon:Sun,text:"UV-lys aktivt — kemiforbruget er sat ned, men mål stadig jævnligt. UV virker kun mens pumpen kører; skift pæren årligt."});
+  measureSuggestions(cfg,state.readings,d).forEach(m=>alerts.push({kind:m.kind,icon:Beaker,text:m.text}));
+  const tasks=buildTasks(cfg,d);
+  const dueFu=[]; { const seen={}; for(const f of (state.followups||[])){ if(f.due<=today()&&!seen[f.name]){ seen[f.name]=1; dueFu.push(f); } } }
 
   return (
     <div style={{fontFamily:FONT,background:T.bg,color:T.ink,minHeight:"100vh"}}>
@@ -345,10 +414,30 @@ REGLER:
 
           {alerts.map((a,i)=><Alert key={i} kind={a.kind} icon={a.icon} text={a.text}/>)}
 
+          {dueFu.map(f=>(
+            <section key={f.id} style={{...card,background:T.infoBg,border:"none",padding:"13px 15px",marginTop:10}}>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                <Beaker size={18} color={T.info} style={{flexShrink:0,marginTop:1}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:T.info,lineHeight:1.45}}>Blev vandet bedre efter <b>{f.name}</b>?</div>
+                  <div style={{display:"flex",gap:8,marginTop:10}}>
+                    <button className="pv-btn" onClick={()=>answerFollowup(f.name,true)} style={{...miniPill,background:T.ok,color:"#fff"}}>Ja, bedre</button>
+                    <button className="pv-btn" onClick={()=>answerFollowup(f.name,false)} style={{...miniPill,background:"#fff",color:T.danger,border:`1.5px solid ${T.dangerBg}`}}>Nej, ikke endnu</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ))}
+
           <SectionTitle icon={Check} title="Skal gøres"/>
           <section style={{...card,padding:8}}>
-            {buildTasks(cfg,d).map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
-              return <TaskRow key={task.id} task={task} done={done} due={due} dose={task.dose||null} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
+            {BUCKET_ORDER.map(bk=>{ const items=tasks.filter(t=>FREQ_BUCKET[t.freq]===bk); if(!items.length)return null;
+              return <div key={bk} style={{marginBottom:6}}>
+                <div style={{...eyebrow,color:T.sub,padding:"8px 8px 4px"}}>{bk}</div>
+                {items.map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
+                  return <TaskRow key={task.id} task={task} done={done} due={due} dose={task.dose||null} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
+                })}
+              </div>;
             })}
           </section>
 
@@ -369,12 +458,13 @@ REGLER:
 
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
         {tab==="log" && <LogView log={state.log||[]} onDelete={deleteLog}/>}
+        {tab==="chat" && <ChatView chat={state.chat||[]} onSend={sendChat} busy={chatBusy} onClear={()=>mutate(s=>({...s,chat:[]}))}/>}
         {tab==="settings" && <SettingsView cfg={cfg} onSave={c=>mutate(s=>({...s,config:c}))} showToast={showToast}
           onReset={()=>mutate(s=>({...s,checks:{},log:[],readings:{},plan:null}))}/>}
       </div>
 
       <nav style={navBar}>
-        {[["home",Home,"I dag"],["plan",Sparkles,"Plan"],["log",History,"Log"],["settings",Settings,"Indstil."]].map(([id,Icon,label])=>(
+        {[["home",Home,"I dag"],["plan",Sparkles,"Plan"],["chat",MessageCircle,"Spørg"],["log",History,"Log"],["settings",Settings,"Indstil."]].map(([id,Icon,label])=>(
           <button key={id} className="pv-btn" onClick={()=>setTab(id)} style={{...navItem,color:tab===id?T.teal:T.sub}}>
             <Icon size={20} strokeWidth={tab===id?2.6:2}/><span style={{fontSize:11,fontWeight:tab===id?700:500}}>{label}</span>
           </button>
@@ -519,6 +609,36 @@ function LogView({log,onDelete}){
   </>;
 }
 
+function ChatView({chat,onSend,busy,onClear}){
+  const [text,setText]=useState("");
+  const endRef=useRef(null);
+  useEffect(()=>{ if(endRef.current)endRef.current.scrollIntoView({behavior:"smooth"}); },[chat.length,busy]);
+  const send=()=>{ const t=text.trim(); if(!t||busy)return; setText(""); onSend(t); };
+  return <>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <SectionTitle icon={MessageCircle} title="Spørg om poolen"/>
+      {chat.length>0&&<button className="pv-btn" onClick={onClear} style={{background:"none",border:"none",color:T.sub,fontSize:12,cursor:"pointer",fontFamily:FONT,marginTop:14}}>Ryd</button>}
+    </div>
+    <section style={{...card,padding:12,minHeight:220,display:"flex",flexDirection:"column"}}>
+      {chat.length===0&&<div style={{color:T.sub,fontSize:13,textAlign:"center",padding:"24px 8px",lineHeight:1.6}}>Spørg om hvad som helst — fx "Det er meget varmt, skal jeg give mere ilt?" eller "Vandet er mælkehvidt, hvad gør jeg?". Jeg kender jeres system, satser, seneste målinger og log.</div>}
+      {chat.map((m,i)=>(
+        <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:8}}>
+          <div style={{maxWidth:"84%",padding:"9px 12px",borderRadius:14,fontSize:13.5,lineHeight:1.5,whiteSpace:"pre-wrap",background:m.role==="user"?T.teal:T.aquaSoft,color:m.role==="user"?"#fff":T.ink}}>
+            {m.role==="user"&&m.initials?<div style={{fontSize:10,fontWeight:800,opacity:.85,marginBottom:2}}>{m.initials}</div>:null}
+            {m.content}
+          </div>
+        </div>
+      ))}
+      {busy&&<div style={{alignSelf:"flex-start",padding:"9px 12px",borderRadius:14,background:T.aquaSoft,color:T.sub,fontSize:13}}>Tænker…</div>}
+      <div ref={endRef}/>
+    </section>
+    <div style={{display:"flex",gap:8,marginTop:10}}>
+      <input className="pv-in" value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); send(); } }} placeholder="Skriv et spørgsmål…" style={{...inStyle,flex:1}}/>
+      <button className="pv-btn" onClick={send} disabled={busy} style={{background:T.teal,color:"#fff",border:"none",borderRadius:10,padding:"0 18px",fontWeight:700,fontSize:14,cursor:busy?"default":"pointer",fontFamily:FONT,opacity:busy?0.6:1}}>Send</button>
+    </div>
+    <p style={{fontSize:11,color:T.sub,margin:"8px 4px 0",lineHeight:1.5}}>Svar er vejledende og via Anthropic. Samtalen deles med hele husstanden.</p>
+  </>;
+}
 function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
   const [addr,setAddr]=useState(""); const [geoBusy,setGeoBusy]=useState(false); const [geoErr,setGeoErr]=useState(null);
   const set=(k,v)=>setF(s=>({...s,[k]:v})); const setRate=(k,v)=>setF(s=>({...s,rates:{...s.rates,[k]:parseFloat(v)||0}})); const save=()=>{ onSave(f); showToast("Gemt"); };
@@ -610,7 +730,7 @@ const miniPill={border:"none",borderRadius:999,padding:"5px 11px",fontSize:12,fo
 const badge={background:T.aqua,color:T.ink,fontSize:10.5,fontWeight:800,padding:"2px 7px",borderRadius:999,letterSpacing:.3};
 const inStyle={width:"100%",boxSizing:"border-box",padding:"10px 11px",border:`1.5px solid ${T.line}`,borderRadius:10,fontSize:14.5,fontFamily:FONT,background:"#fff",color:T.ink};
 const navBar={position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,.92)",backdropFilter:"blur(10px)",borderTop:`1px solid ${T.line}`,display:"flex",justifyContent:"space-around",padding:"8px 0 10px",zIndex:40};
-const navItem={background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",padding:"4px 16px",fontFamily:FONT};
+const navItem={background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",padding:"4px 9px",fontFamily:FONT};
 
 ReactDOM.createRoot(document.getElementById("root")).render(<Poolvagten/>);
 </script>

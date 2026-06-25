@@ -93,7 +93,7 @@ async def lifespan(_: FastAPI):
         await _pool.close()
 
 
-app = FastAPI(title="Poolvagten", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Poolvagten", version="1.2.0", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -158,12 +158,14 @@ async def geocode(q: str) -> dict:
     }
 
 
-class PlanRequest(BaseModel):
-    prompt: str
+async def _anthropic(extra: dict, max_tokens: int = 1000) -> str:
+    """Send et kald til Anthropic med retry + reservemodel og returnér teksten.
 
-
-@app.post("/api/plan")
-async def plan(req: PlanRequest) -> dict:
+    `extra` indeholder fx {"messages": [...]} og evt. {"system": "..."}.
+    Anthropic kan svare 529 (overloaded) / 503 / 429 i korte perioder, så vi
+    prøver den primære model med backoff og falder ellers tilbage til
+    reservemodellen, før vi giver op.
+    """
     if not ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY er ikke sat på serveren.")
     headers = {
@@ -171,19 +173,12 @@ async def plan(req: PlanRequest) -> dict:
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
     }
-    # Anthropic kan svare 529 (overloaded) / 503 / 429 i korte perioder. Vi prøver
-    # den primære model med backoff; er den vedvarende overbelastet, falder vi
-    # tilbage til reservemodellen, så planen stadig kan lægges.
     overloaded = (429, 503, 529)
     models = [MODEL] + ([FALLBACK_MODEL] if FALLBACK_MODEL and FALLBACK_MODEL != MODEL else [])
     resp = None
     async with httpx.AsyncClient(timeout=45) as client:
         for model in models:
-            payload = {
-                "model": model,
-                "max_tokens": 1000,
-                "messages": [{"role": "user", "content": req.prompt}],
-            }
+            payload = {"model": model, "max_tokens": max_tokens, **extra}
             for attempt in range(3):
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages", headers=headers, json=payload
@@ -195,7 +190,6 @@ async def plan(req: PlanRequest) -> dict:
             if resp.status_code == 200:
                 break
             if resp.status_code not in overloaded:
-                # Ægte fejl (ukendt model, ugyldig nøgle, tom kredit ...) — vis årsagen.
                 raise HTTPException(
                     502, f"Anthropic {resp.status_code} (model={model}): {resp.text[:400]}"
                 )
@@ -203,11 +197,45 @@ async def plan(req: PlanRequest) -> dict:
     if resp is None or resp.status_code != 200:
         raise HTTPException(503, "AI-tjenesten er overbelastet lige nu. Prøv igen om et øjeblik.")
     data = resp.json()
-    text = "".join(
+    return "".join(
         block.get("text", "")
         for block in data.get("content", [])
         if block.get("type") == "text"
     )
+
+
+class PlanRequest(BaseModel):
+    prompt: str
+
+
+@app.post("/api/plan")
+async def plan(req: PlanRequest) -> dict:
+    text = await _anthropic({"messages": [{"role": "user", "content": req.prompt}]}, max_tokens=1000)
+    return {"text": text}
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    system: str = ""
+    messages: list[ChatMessage]
+
+
+@app.post("/api/chat")
+async def chat(req: ChatRequest) -> dict:
+    msgs = [{"role": m.role, "content": m.content} for m in req.messages][-20:]
+    # Anthropic kræver at samtalen starter med en bruger-besked.
+    while msgs and msgs[0]["role"] != "user":
+        msgs.pop(0)
+    if not msgs:
+        raise HTTPException(400, "Ingen besked.")
+    extra: dict = {"messages": msgs}
+    if req.system.strip():
+        extra["system"] = req.system
+    text = await _anthropic(extra, max_tokens=700)
     return {"text": text}
 
 

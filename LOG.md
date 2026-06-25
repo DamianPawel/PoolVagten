@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — v1.2.0: opfølgning, måleforslag, grupper, spørgechat
+- **Opfølgning:** hver ekstra dosis (logExtra) opretter en followup (due = +2 dage). På "I dag" vises forfaldne followups (dedup pr. navn) med Ja/Nej; svaret logges (`followup`-mærke) og medtages i AI-planen, så den kan foreslå næste skridt ved manglende bedring. Valg: alle 'efter behov'-doser.
+- **Måleforslag (lokalt):** `measureSuggestions` regner et konkret forslag ud fra seneste pH/ilt/klor vs. målområder og JERES satser (fx pH 7,8 → ~X g pH-Minus). Vises som alert på "I dag". Ingen AI involveret (brugervalg).
+- **Skal gøres grupperet:** `FREQ_BUCKET`/`BUCKET_ORDER` → Dagligt/Ugentligt/Månedligt/Årligt; eksakt interval står stadig som undertekst på opgaven.
+- **Spørgechat (delt):** ny "Spørg"-fane + `ChatView`; `state.chat` deles i husstanden; `buildChatSystem` giver Claude pool-kontekst (system, satser, mål, seneste målinger/log/vejr). Backend: nyt `/api/chat` + `_anthropic`-hjælper (genbrugt retry/reservemodel; `/api/plan` refaktoreret oveni).
+- Datamodel: kun nye top-level `followups`/`chat` (migreres ind med defaults). Ingen ny pakke. Verificeret: JSX transpilerer rent (Babel 7), main.py importerer, uafhængig agent-review fandt ingen fejl.
+
 ## 2026-06-23 — Log: dedup + slet enkelt post
 - Dedup: ny `addLogEntry` slår identiske hændelser (samme person+label) sammen inden for 90 sek. — bruges i `toggleTask`, `saveReading`, `logExtra`. Stopper dubletter fra fluebens-fjern/sæt og dobbelt-tryk.
 - Slet: hver log-post har nu en to-trins **× → Slet?**-knap (auto-fortryd efter 3 sek.), `deleteLog` filtrerer posten ud. Rydder også gamle dubletter.
