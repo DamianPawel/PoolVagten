@@ -288,7 +288,7 @@ function Poolvagten(){
     const rd=[]; if(r.ph)rd.push(`pH ${r.ph.value}`); if(r.oxy)rd.push(`aktiv ilt ${r.oxy.value} mg/l`); if(r.klor)rd.push(`frit klor ${r.klor.value} mg/l`);
     const recent=(state.log||[]).slice(0,8).map(e=>`${dateStr(new Date(e.ts))} ${e.label}`).join("; ");
     const tmax=weather?.temperature_2m_max?.[0];
-    return `Du er en hjælpsom dansk pool-ekspert for en husstand. Svar kort, konkret og venligt på dansk. Brug KUN doseringssatserne og retningslinjerne nedenfor — find ikke på andre tal. Mangler du en måling for at svare, så bed dem måle.
+    return `Du er en hjælpsom dansk pool-ekspert for en husstand. Svar kort, konkret og venligt på dansk i ren tekst — INGEN markdown (ingen #, ##, **, tabeller eller punkttegn som * eller -). Korte afsnit. Brug KUN doseringssatserne og retningslinjerne nedenfor — find ikke på andre tal. Mangler du en måling for at svare, så bed dem måle.
 POOL: ${cfg.poolSize} L, ${sysName}-system, filter: ${FILTERS[cfg.filterType]||cfg.filterType}, ${cfg.uvLamp?"UV-lys aktivt, ":""}vandfald: ${cfg.useWaterfall?"ja":"nej"}, lokation ${cfg.locationName}.
 MÅL: pH 7,0–7,4 (ideal 7,2)${cfg.system==="chlorine"?", frit klor 1–3 mg/l, cyanursyre under 80 ppm":", aktiv ilt 3–5 mg/l"}.
 SATSER (skaleret til poolen): OxyChock ${dd.oxy3} g + Aktivator ${dd.akt3} ml hver 3. dag; OxyChock dagligt alt. ${dd.oxyDaily} g; OxyChock chok ${dd.oxyProblem} g; pH-Minus ${dd.phMinus} g sænker pH 0,2; pH-Plus ${dd.phPlus} g hæver pH 0,2; KlarPool ${dd.klarWeekly} ml/uge; FlokPool ${dd.flokMin}–${dd.flokMax} ml; SeaKlear ${dd.seaklear} ml/uge; opstart ${dd.oxyStart} g + ${dd.aktStart} ml.
