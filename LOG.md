@@ -2,6 +2,10 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Dine doser: foldbar fremgangsmåde
+- Tryk på et produktnavn i "Dine doser" → folder en kort how-to ud (`DOSE_INFO`, keyet på produktnavn; `DoseRow` har nu lokal open-state + chevron).
+- Teksterne følger de eksisterende retningslinjer (pH-mål, intervaller, filter/flok-metode) — ingen nye doseringstal.
+
 ## 2026-06-23 — v1.2.0: opfølgning, måleforslag, grupper, spørgechat
 - **Opfølgning:** hver ekstra dosis (logExtra) opretter en followup (due = +2 dage). På "I dag" vises forfaldne followups (dedup pr. navn) med Ja/Nej; svaret logges (`followup`-mærke) og medtages i AI-planen, så den kan foreslå næste skridt ved manglende bedring. Valg: alle 'efter behov'-doser.
 - **Måleforslag (lokalt):** `measureSuggestions` regner et konkret forslag ud fra seneste pH/ilt/klor vs. målområder og JERES satser (fx pH 7,8 → ~X g pH-Minus). Vises som alert på "I dag". Ingen AI involveret (brugervalg).
