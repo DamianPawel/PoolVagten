@@ -257,9 +257,11 @@ function Poolvagten(){
   const toggleTask=(taskId,label)=>{ if(!me){ showToast("Vælg en profil først"); return; }
     const key=`${today()}::${taskId}`;
     mutate(s=>{ const checks={...s.checks};
-      if(checks[key]){ delete checks[key]; return {...s,checks}; }
-      checks[key]={initials:me,ts:Date.now()};
+      if(checks[key]){ const lid=checks[key].logId; delete checks[key];
+        return {...s,checks,log:lid?(s.log||[]).filter(e=>e.id!==lid):(s.log||[])}; }
       const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label,initials:me};
+      const dup=(s.log||[]).find(e=>e.label===entry.label&&e.initials===entry.initials&&Math.abs(entry.ts-e.ts)<90000);
+      checks[key]={initials:me,ts:Date.now(),logId:dup?dup.id:entry.id};
       return {...s,checks,log:addLogEntry(s.log,entry)};
     });
   };
@@ -333,6 +335,11 @@ Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rig
       let extraLines=""; if(recentExtras.length){ extraLines="EKSTRA DOSER GIVET FOR NYLIG (ud over de faste):\n"+recentExtras.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.extra.name}${e.extra.amount?` (${e.extra.amount})`:""}`).join("\n")+"\n"; }
       const recentFu=(state.log||[]).filter(e=>e.followup && (Date.now()-e.ts)<6*86400000);
       let fuLines=""; if(recentFu.length){ fuLines="OPFØLGNING PÅ TIDLIGERE BEHANDLINGER:\n"+recentFu.map(e=>`- ${dateStr(new Date(e.ts))}: ${e.followup.name} → ${e.followup.better?"vandet blev bedre":"INGEN bedring endnu"}`).join("\n")+"\n"; }
+      const dTasks=buildTasks(cfg,d);
+      const doneToday=dTasks.filter(t=>state.checks&&state.checks[`${today()}::${t.id}`]).map(t=>t.label);
+      let doneLines=doneToday.length?`ALLEREDE GJORT I DAG (${today()}): ${doneToday.join(", ")}.\n`:"";
+      const recentActs=(state.log||[]).filter(e=>(Date.now()-e.ts)<5*86400000).slice(0,12);
+      let actLines=recentActs.length?"SENESTE AKTIVITET (hvad der faktisk er gjort):\n"+recentActs.map(e=>`- ${dateStr(new Date(e.ts))}${e.initials?` ${e.initials}`:""}: ${e.label}`).join("\n")+"\n":"";
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
@@ -341,12 +348,13 @@ Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rig
 POOL: ${cfg.poolSize} liter. Pumpe ${cfg.pumpCap} l/t. Filtertype: ${filterName}. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
 FASTE DOSER: ${doseLine}
 ${uvLine}SIDST GIVET HOVEDDESINFEKTION: ${lastMain}.
-${extraLines}${fuLines}VEJRUDSIGT:
+${doneLines}${actLines}${extraLines}${fuLines}VEJRUDSIGT:
 ${wxLines}
 Returnér KUN gyldig JSON, ingen markdown, ingen tekst udenom, præcis dette format:
 {"days":[{"date":"YYYY-MM-DD","weekday":"Tirsdag","weather":"24° klart","headline":"kort, maks 6 ord","actions":["punkt med dosis hvor relevant"],"tip":"én kort sætning","alert":"kort advarsel eller null"}]}
 
 REGLER:
+- VIGTIGT: Tag udgangspunkt i "ALLEREDE GJORT I DAG" og "SENESTE AKTIVITET" ovenfor. Anbefal IKKE noget der allerede er udført i dag, og byg videre på hvad der faktisk er gjort — ikke kun hvad der oprindeligt var planlagt.
 - Beregn selv hvilke dage hoveddesinfektion skal gives ud fra "sidst givet" og intervallet (aktiv ilt OxyChock = hver 3. dag; CombiTabs og klor = dagligt tilsyn).
 - temp > 22°C: anbefal hyppigere måling, evt. ekstra dosis og flere pumpetimer.
 - nedbør > 3 mm: mind om pH-tjek efter regn.

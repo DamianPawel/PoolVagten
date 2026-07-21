@@ -2,6 +2,10 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Fjern flueben rydder også loggen + plan ser hvad der er gjort
+- `toggleTask` gemmer nu log-postens id på fluebenet (`checks[key].logId`). Fjernes fluebenet, slettes den tilhørende log-post automatisk (ingen manuel oprydning i Log-fanen). Gamle flueben uden logId lader loggen være.
+- `generatePlan`: prompten indeholder nu eksplicit "ALLEREDE GJORT I DAG" (dagens flueben) + "SENESTE AKTIVITET" (log, 5 dage) + en regel om ikke at gentage udført arbejde og bygge videre på hvad der faktisk er gjort. Så en ny plan tager højde for afvigelser fra den gamle plan.
+
 ## 2026-06-23 — Dine doser: foldbar fremgangsmåde
 - Tryk på et produktnavn i "Dine doser" → folder en kort how-to ud (`DOSE_INFO`, keyet på produktnavn; `DoseRow` har nu lokal open-state + chevron).
 - Teksterne følger de eksisterende retningslinjer (pH-mål, intervaller, filter/flok-metode) — ingen nye doseringstal.
