@@ -77,6 +77,7 @@ const FREQ_BUCKET = { daily:"Dagligt", every3:"Dagligt", weekly:"Ugentligt", eve
 const BUCKET_ORDER = ["Dagligt","Ugentligt","Månedligt","Årligt"];
 const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor", temp:"vandtemp" };
 const READING_UNIT = { ph:"", oxy:" mg/l", klor:" mg/l", temp:" °C" };
+const TEMP_FRESH_MS = 2*86400000;   // målt vandtemp "gælder" som styrende i 2 dage; ellers luft/vejr
 /* Fremgangsmåde pr. produkt — vises foldet ud når man trykker på navnet i "Dine doser". */
 const DOSE_INFO = {
   "OxyChock + Aktivator": "Den løbende desinfektion. Opløs OxyChock i en spand lunkent vand og hæld det langs kanten mens pumpen kører. Tilsæt Aktivator i vandet samme dag — den booster det aktive ilt. Gives hver 3. dag. Sigt efter aktiv ilt 3–5 mg/l, og bad tidligst 15 min efter.",
@@ -202,8 +203,6 @@ function measureSuggestions(cfg, readings, d){
     if(kl!=null){ if(kl<1) out.push({kind:"warn",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Lavt — tilsæt klor efter etiket og mål igen.`});
       else if(kl>3) out.push({kind:"info",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Højt — vent med mere, og bad først når det er faldet.`}); }
   }
-  const tp=num(r.temp&&r.temp.value);
-  if(tp!=null&&tp>=25) out.push({kind:"warn",text:`Badevandet er ${r.temp.value} °C — varmt. Alger og bakterier trives; mål ${cfg.system==="chlorine"?"klor":"aktiv ilt"} oftere, kør pumpen længere, og overvej en ekstra dosis.`});
   return out;
 }
 
@@ -344,7 +343,8 @@ Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rig
       const recentActs=(state.log||[]).filter(e=>(Date.now()-e.ts)<5*86400000).slice(0,12);
       let actLines=recentActs.length?"SENESTE AKTIVITET (hvad der faktisk er gjort):\n"+recentActs.map(e=>`- ${dateStr(new Date(e.ts))}${e.initials?` ${e.initials}`:""}: ${e.label}`).join("\n")+"\n":"";
       const wt=state.readings&&state.readings.temp;
-      let tempLine=wt?`BADEVANDSTEMP (målt ${dateStr(new Date(wt.ts))}): ${wt.value} °C — varmt vand (25 °C+) øger kemiforbrug og algevækst.\n`:"";
+      const wtOk=wt&&(Date.now()-wt.ts)<TEMP_FRESH_MS;
+      let tempLine=wtOk?`MÅLT BADEVANDSTEMP (aktuel, ${dateStr(new Date(wt.ts))}): ${wt.value} °C — brug dette som dagens faktiske tilstand (varmt vand 25 °C+ øger kemiforbrug/algevækst), og brug luft-forecasten nedenfor for de kommende dage.\n`:"";
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
@@ -388,12 +388,18 @@ REGLER:
   const tmax=weather?.temperature_2m_max?.[0];
   const precip=weather?.precipitation_sum?.[0];
   const wToday=weather?wx(weather.weather_code[0]):null;
-  const hot=tmax!=null?tmax>=22:manualWx==="hot";
+  // Frisk målt vandtemp (≤2 dage) er den faktiske tilstand → styrer pumpetimer + varme-varsel.
+  // Ellers falder vi tilbage til luft/vejr-forecast (som også dækker de kommende dage i planen).
+  const wtR=state.readings&&state.readings.temp;
+  const wtFresh=(wtR&&(Date.now()-wtR.ts)<TEMP_FRESH_MS)?num(wtR.value):null;
   const rain=precip!=null?precip>=3:manualWx==="rain";
-  const hours=pumpHours(tmax)+(cfg.uvLamp?2:0);
+  const hot = wtFresh!=null ? wtFresh>=25 : (tmax!=null?tmax>=22:manualWx==="hot");
+  const hours=pumpHours(wtFresh!=null?wtFresh:tmax)+(cfg.uvLamp?2:0);
 
   const alerts=[];
-  if(hot)alerts.push({kind:"warn",icon:Sun,text:"Varmt vejr — alger og bakterier trives. Mål desinfektion før badning, og overvej en ekstra dosis i dag."});
+  if(hot)alerts.push({kind:"warn",icon:Sun,text: wtFresh!=null
+    ? `Badevandet er ${wtR.value} °C — varmt. Alger og bakterier trives; mål ${cfg.system==="chlorine"?"klor":"ilt"} oftere, kør pumpen længere (${hours} t), og overvej en ekstra dosis.`
+    : "Varmt vejr — vandet varmes op, og alger/bakterier trives. Mål desinfektion før badning, og overvej en ekstra dosis i dag."});
   if(rain)alerts.push({kind:"info",icon:Droplets,text:"Regn i dag — regnvand skubber ofte pH. Tjek pH efter skybruddet."});
   if(cfg.useWaterfall)alerts.push({kind:"warn",icon:Waves,text:"Vandfald aktivt — luftningen hæver pH. Mål pH ekstra ofte og hav pH-Minus klar."});
   if(cfg.uvLamp)alerts.push({kind:"info",icon:Sun,text:"UV-lys aktivt — kemiforbruget er sat ned, men mål stadig jævnligt. UV virker kun mens pumpen kører; skift pæren årligt."});

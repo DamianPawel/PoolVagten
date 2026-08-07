@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Frisk vandtemp fører; luft/vejr udfylder
+- Frisk målt vandtemp (≤ `TEMP_FRESH_MS` = 2 dage) styrer nu **pumpetimer** (`pumpHours(vandtemp)`) og **varme-varsel** (vand ≥ 25 °C). Er der ingen frisk måling, bruges luft-forecast som før (luft ≥ 22 °C).
+- Varme-varslet er kilde-bevidst: viser målt badevandstemp når den fører, ellers "varmt vejr".
+- Fjernede det duplikerede vandtemp-varsel i `measureSuggestions` (håndteres nu ét sted).
+- Planen: målt vandtemp medtages kun som "dagens faktiske tilstand" når den er frisk, med besked om at bruge luft-forecast for de kommende dage. Gammel måling ignoreres til styring (står stadig i loggen).
+- Baggrund: vandtemp er den fysisk mest korrekte driver for kemiforbrug/omsætning (pumpetimer ≈ vandtemp-regel); luft/vejr er den altid-tilgængelige forudsigelse og dækker fremtiden.
+
 ## 2026-06-23 — Badevandstemperatur som hurtig måling
 - Ny måling `temp` (°C) i "Hurtige målinger" (fuld bredde under pH/ilt). `READING_UNIT` styrer enhed pr. måling (°C / mg/l).
 - Varmt vand (≥25 °C) giver et lokalt varsel på "I dag" (mål oftere, kør pumpen længere, overvej ekstra dosis).
