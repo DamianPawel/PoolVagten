@@ -2,6 +2,11 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Badevandstemperatur som hurtig måling
+- Ny måling `temp` (°C) i "Hurtige målinger" (fuld bredde under pH/ilt). `READING_UNIT` styrer enhed pr. måling (°C / mg/l).
+- Varmt vand (≥25 °C) giver et lokalt varsel på "I dag" (mål oftere, kør pumpen længere, overvej ekstra dosis).
+- Målt vandtemp sendes med i chat-konteksten og plan-prompten (varmt vand øger kemiforbrug/algevækst).
+
 ## 2026-06-23 — Fjern flueben rydder også loggen + plan ser hvad der er gjort
 - `toggleTask` gemmer nu log-postens id på fluebenet (`checks[key].logId`). Fjernes fluebenet, slettes den tilhørende log-post automatisk (ingen manuel oprydning i Log-fanen). Gamle flueben uden logId lader loggen være.
 - `generatePlan`: prompten indeholder nu eksplicit "ALLEREDE GJORT I DAG" (dagens flueben) + "SENESTE AKTIVITET" (log, 5 dage) + en regel om ikke at gentage udført arbejde og bygge videre på hvad der faktisk er gjort. Så en ny plan tager højde for afvigelser fra den gamle plan.

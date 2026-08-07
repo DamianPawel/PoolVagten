@@ -75,7 +75,8 @@ const FREQ_LABEL = { daily:"Dagligt", every3:"Hver 3. dag", weekly:"Ugentligt", 
 /* Frekvens → gruppe i "Skal gøres" */
 const FREQ_BUCKET = { daily:"Dagligt", every3:"Dagligt", weekly:"Ugentligt", every14:"Ugentligt", monthly:"Månedligt", yearly:"Årligt" };
 const BUCKET_ORDER = ["Dagligt","Ugentligt","Månedligt","Årligt"];
-const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor" };
+const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor", temp:"vandtemp" };
+const READING_UNIT = { ph:"", oxy:" mg/l", klor:" mg/l", temp:" °C" };
 /* Fremgangsmåde pr. produkt — vises foldet ud når man trykker på navnet i "Dine doser". */
 const DOSE_INFO = {
   "OxyChock + Aktivator": "Den løbende desinfektion. Opløs OxyChock i en spand lunkent vand og hæld det langs kanten mens pumpen kører. Tilsæt Aktivator i vandet samme dag — den booster det aktive ilt. Gives hver 3. dag. Sigt efter aktiv ilt 3–5 mg/l, og bad tidligst 15 min efter.",
@@ -201,6 +202,8 @@ function measureSuggestions(cfg, readings, d){
     if(kl!=null){ if(kl<1) out.push({kind:"warn",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Lavt — tilsæt klor efter etiket og mål igen.`});
       else if(kl>3) out.push({kind:"info",text:`Frit klor er ${r.klor.value} mg/l (mål 1–3). Højt — vent med mere, og bad først når det er faldet.`}); }
   }
+  const tp=num(r.temp&&r.temp.value);
+  if(tp!=null&&tp>=25) out.push({kind:"warn",text:`Badevandet er ${r.temp.value} °C — varmt. Alger og bakterier trives; mål ${cfg.system==="chlorine"?"klor":"aktiv ilt"} oftere, kør pumpen længere, og overvej en ekstra dosis.`});
   return out;
 }
 
@@ -267,7 +270,7 @@ function Poolvagten(){
   };
   const saveReading=(kind,value)=>{ if(!value)return; if(!me){ showToast("Vælg en profil først"); return; }
     mutate(s=>{ const readings={...s.readings,[kind]:{value,ts:Date.now(),initials:me}};
-      const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${kind!=="ph"?" mg/l":""}`,initials:me};
+      const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${READING_UNIT[kind]||""}`,initials:me};
       return {...s,readings,log:addLogEntry(s.log,entry)};
     });
     showToast("Måling gemt");
@@ -303,7 +306,7 @@ function Poolvagten(){
   const buildChatSystem=()=>{
     const dd=doses(cfg); const r=state.readings||{};
     const sysName=cfg.system==="chlorine"?"klor":("aktiv ilt"+(cfg.oxygenForm==="combitabs"?" (CombiTabs)":""));
-    const rd=[]; if(r.ph)rd.push(`pH ${r.ph.value}`); if(r.oxy)rd.push(`aktiv ilt ${r.oxy.value} mg/l`); if(r.klor)rd.push(`frit klor ${r.klor.value} mg/l`);
+    const rd=[]; if(r.ph)rd.push(`pH ${r.ph.value}`); if(r.oxy)rd.push(`aktiv ilt ${r.oxy.value} mg/l`); if(r.klor)rd.push(`frit klor ${r.klor.value} mg/l`); if(r.temp)rd.push(`badevandstemp ${r.temp.value} °C`);
     const recent=(state.log||[]).slice(0,8).map(e=>`${dateStr(new Date(e.ts))} ${e.label}`).join("; ");
     const tmax=weather?.temperature_2m_max?.[0];
     return `Du er en hjælpsom dansk pool-ekspert for en husstand. Svar kort, konkret og venligt på dansk i ren tekst — INGEN markdown (ingen #, ##, **, tabeller eller punkttegn som * eller -). Korte afsnit. Brug KUN doseringssatserne og retningslinjerne nedenfor — find ikke på andre tal. Mangler du en måling for at svare, så bed dem måle.
@@ -340,6 +343,8 @@ Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rig
       let doneLines=doneToday.length?`ALLEREDE GJORT I DAG (${today()}): ${doneToday.join(", ")}.\n`:"";
       const recentActs=(state.log||[]).filter(e=>(Date.now()-e.ts)<5*86400000).slice(0,12);
       let actLines=recentActs.length?"SENESTE AKTIVITET (hvad der faktisk er gjort):\n"+recentActs.map(e=>`- ${dateStr(new Date(e.ts))}${e.initials?` ${e.initials}`:""}: ${e.label}`).join("\n")+"\n":"";
+      const wt=state.readings&&state.readings.temp;
+      let tempLine=wt?`BADEVANDSTEMP (målt ${dateStr(new Date(wt.ts))}): ${wt.value} °C — varmt vand (25 °C+) øger kemiforbrug og algevækst.\n`:"";
       if(weather&&weather.time){ for(let i=0;i<weather.time.length;i++){ const w=wx(weather.weather_code[i]);
         wxLines+=`- ${weather.time[i]} (${WEEKDAYS[new Date(weather.time[i]).getDay()]}): ${Math.round(weather.temperature_2m_max[i])}°C max, ${weather.precipitation_sum[i]} mm nedbør, ${w.t}\n`; } }
       else { const m={normal:"under 22°C, tørt",hot:"over 22°C, varmt",rain:"regn"}[manualWx]; wxLines=`- ${today()}: ${m} (manuelt valgt)\n`; }
@@ -348,7 +353,7 @@ Ved problemer (grønt/mælkehvidt/tåget vand) foreslå konkrete trin med de rig
 POOL: ${cfg.poolSize} liter. Pumpe ${cfg.pumpCap} l/t. Filtertype: ${filterName}. Lokation ${cfg.locationName}. Vandfald/dykpumpe i brug: ${cfg.useWaterfall?"JA":"nej"}.
 FASTE DOSER: ${doseLine}
 ${uvLine}SIDST GIVET HOVEDDESINFEKTION: ${lastMain}.
-${doneLines}${actLines}${extraLines}${fuLines}VEJRUDSIGT:
+${tempLine}${doneLines}${actLines}${extraLines}${fuLines}VEJRUDSIGT:
 ${wxLines}
 Returnér KUN gyldig JSON, ingen markdown, ingen tekst udenom, præcis dette format:
 {"days":[{"date":"YYYY-MM-DD","weekday":"Tirsdag","weather":"24° klart","headline":"kort, maks 6 ord","actions":["punkt med dosis hvor relevant"],"tip":"én kort sætning","alert":"kort advarsel eller null"}]}
@@ -471,6 +476,9 @@ REGLER:
             {cfg.system==="chlorine"
               ? <Reading label="Frit klor" hint="1 – 3 mg/l" placeholder="2" last={state.readings?.klor} onSave={v=>saveReading("klor",v)}/>
               : <Reading label="Aktiv ilt" hint="3 – 5 mg/l" placeholder="4" last={state.readings?.oxy} onSave={v=>saveReading("oxy",v)}/>}
+            <div style={{gridColumn:"1 / -1"}}>
+              <Reading label="Badevandstemperatur" hint="°C — fx 24" placeholder="24" last={state.readings?.temp} onSave={v=>saveReading("temp",v)}/>
+            </div>
           </section>
 
           <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L${d.uv?" · UV":""}`}/>
