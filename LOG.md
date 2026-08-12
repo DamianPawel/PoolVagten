@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Login er tændt (REQUIRE_AUTH=1)
+- `REQUIRE_AUTH=1` sat i Railway. Verificeret: `state`, `pools`, `weather`, `geocode`, `plan` og `chat` svarer **401** uden login; login-skærm, `/api/auth/me` og `/api/health` er fortsat åbne (nødvendigt for selve login-flowet).
+- Anthropic-nøglen er dermed ikke længere tilgængelig for enhver med linket.
+- DP (admin) og BUH (editor) er begge logget ind via Google. `/api/health` viser `orphans: 0` — ingen bruger sidder fast uden adgang.
+- Nødbremse dokumenteret: slet `REQUIRE_AUTH`-variablen, så er appen åben igen inden for et halvt minut, uden datatab.
+- Data uændret gennem alle fire etaper: 60 log-poster, 104 checks, 22 chat-beskeder — identisk med backuppen.
+
 ## 2026-06-23 — Login etape 3+4/4: adgangskontrol, adresser og brugere
 **Etape 3 — adgangskontrol** (deployet, tændes med `REQUIRE_AUTH=1` i Railway):
 - `require_role()` på `state`, `weather`, `geocode`, `plan` og `chat`. No-op mens `REQUIRE_AUTH` er slukket, så deployet var risikofrit.

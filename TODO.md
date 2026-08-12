@@ -1,8 +1,7 @@
 # TODO.md
 
 ## Nu
-- [ ] **Tænd låsen:** sæt `REQUIRE_AUTH=1` i Railway (alt er bygget og deployet).
-- [ ] Tilføj BUH (elizabethtfrandsen@gmail.com) som **editor** under Indstillinger → Hvem har adgang.
+- [ ] Gennemgå brugerlisten: der er **4 brugere** med adgang — bekræft at det er de rigtige, og fjern evt. tastefejl-konti.
 - [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
 - [ ] Tilføj husstandens profiler (initialer).
 - [ ] **Klor-doser:** indtast løbende klor + Klor Starter-chok når guiderne er modtaget (placeholdere står "doser følger" i UI'et og prompten).
