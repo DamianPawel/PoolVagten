@@ -244,28 +244,31 @@ async def upsert_login(email: str, name: str, google_sub: str | None) -> dict:
     return await user_by_id(uid)
 
 
-async def get_state() -> dict | None:
+async def get_state(pool_id: int = 1) -> dict | None:
     if _pool:
         async with _pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT data FROM pool_state WHERE id = 1")
+            row = await conn.fetchrow(
+                "SELECT data FROM pool_state WHERE id = $1", pool_id
+            )
             return json.loads(row["data"]) if row else None
     if STATE_FILE.exists():
         return json.loads(STATE_FILE.read_text("utf-8"))
     return None
 
 
-async def put_state(data: dict) -> dict:
+async def put_state(data: dict, pool_id: int = 1) -> dict:
     payload = json.dumps(data, ensure_ascii=False)
     if _pool:
         async with _pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO pool_state (id, data, updated_at)
-                VALUES (1, $1, now())
+                VALUES ($2, $1, now())
                 ON CONFLICT (id) DO UPDATE
                     SET data = EXCLUDED.data, updated_at = now()
                 """,
                 payload,
+                pool_id,
             )
     else:
         STATE_FILE.write_text(payload, "utf-8")
@@ -483,18 +486,18 @@ def _emptied(old, new) -> bool:
 
 
 @app.get("/api/state")
-async def read_state(request: Request) -> dict:
-    await require_role(request, "user")
-    return await get_state() or {}
+async def read_state(request: Request, pool: int = 1) -> dict:
+    await require_role(request, "user", pool)
+    return await get_state(pool) or {}
 
 
 @app.put("/api/state")
-async def write_state(payload: dict, request: Request) -> dict:
-    user = await require_role(request, "user")
+async def write_state(payload: dict, request: Request, pool: int = 1) -> dict:
+    user = await require_role(request, "user", pool)
     # Rolle-regler håndhæves server-side, ikke kun i UI'et. Hele tilstanden er
     # ét dokument, så vi sammenligner det indsendte med det gemte.
     if user and user.get("role") == "user":
-        old = await get_state() or {}
+        old = await get_state(pool) or {}
         if json.dumps(old.get("config"), sort_keys=True) != json.dumps(
             payload.get("config"), sort_keys=True
         ):
@@ -503,7 +506,160 @@ async def write_state(payload: dict, request: Request) -> dict:
             _emptied(old.get(k), payload.get(k)) for k in ("log", "checks", "readings")
         ):
             raise HTTPException(403, "Kun admin og editor kan nulstille.")
-    return await put_state(payload)
+    return await put_state(payload, pool)
+
+
+# --------------------------------------------------------------------------- #
+# Adresser og brugere (etape 4)
+# --------------------------------------------------------------------------- #
+@app.get("/api/pools")
+async def list_pools(request: Request) -> dict:
+    """Adresser den indloggede kan se — med egen rolle på hver."""
+    user = await current_user(request)
+    if not _pool:
+        return {"pools": [{"id": 1, "name": "Min pool", "role": "admin"}]}
+    async with _pool.acquire() as conn:
+        if not REQUIRE_AUTH and not user:
+            rows = await conn.fetch("SELECT id, name FROM pool_state ORDER BY id")
+            return {"pools": [{"id": r["id"], "name": r["name"], "role": "admin"} for r in rows]}
+        if not user:
+            raise HTTPException(401, "Log ind først.")
+        rows = await conn.fetch(
+            """
+            SELECT p.id, p.name, m.role
+              FROM pool_state p
+              JOIN memberships m ON m.pool_id = p.id
+             WHERE m.user_id = $1
+             ORDER BY p.id
+            """,
+            user["id"],
+        )
+    return {"pools": [dict(r) for r in rows]}
+
+
+class PoolRequest(BaseModel):
+    name: str
+
+
+@app.post("/api/pools")
+async def create_pool(req: PoolRequest, request: Request) -> dict:
+    """Opret en ny adresse. Den der opretter bliver admin på den."""
+    user = await current_user(request)
+    if REQUIRE_AUTH and not user:
+        raise HTTPException(401, "Log ind først.")
+    name = req.name.strip() or "Ny pool"
+    fresh = {
+        "config": {},  # frontend fylder standardværdier i ved første besøg
+        "checks": {}, "log": [], "readings": {}, "plan": None,
+        "profiles": [], "followups": [], "chat": [], "updatedAt": 0,
+    }
+    async with _pool.acquire() as conn:
+        new_id = await conn.fetchval(
+            """
+            INSERT INTO pool_state (id, name, data)
+            VALUES ((SELECT COALESCE(max(id), 0) + 1 FROM pool_state), $1, $2)
+            RETURNING id
+            """,
+            name,
+            json.dumps(fresh, ensure_ascii=False),
+        )
+        if user:
+            await conn.execute(
+                "INSERT INTO memberships (user_id, pool_id, role) VALUES ($1, $2, 'admin')",
+                user["id"],
+                new_id,
+            )
+    return {"id": new_id, "name": name, "role": "admin"}
+
+
+@app.delete("/api/pools/{pool_id}")
+async def delete_pool(pool_id: int, request: Request) -> dict:
+    """Slet en adresse (fx solgt hus). Kun admin på netop den adresse."""
+    await require_role(request, "admin", pool_id)
+    async with _pool.acquire() as conn:
+        remaining = await conn.fetchval("SELECT count(*) FROM pool_state")
+        if remaining <= 1:
+            raise HTTPException(400, "Du kan ikke slette din eneste adresse.")
+        await conn.execute("DELETE FROM pool_state WHERE id = $1", pool_id)
+    return {"ok": True}
+
+
+@app.get("/api/pools/{pool_id}/users")
+async def list_pool_users(pool_id: int, request: Request) -> dict:
+    await require_role(request, "user", pool_id)
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT u.id, u.email, u.name, u.initials, m.role
+              FROM users u JOIN memberships m ON m.user_id = u.id
+             WHERE m.pool_id = $1
+             ORDER BY u.id
+            """,
+            pool_id,
+        )
+    return {"users": [dict(r) for r in rows]}
+
+
+class MemberRequest(BaseModel):
+    email: str
+    role: str = "user"
+    name: str = ""
+    initials: str = ""
+
+
+@app.post("/api/pools/{pool_id}/users")
+async def add_pool_user(pool_id: int, req: MemberRequest, request: Request) -> dict:
+    """Giv en e-mail adgang til adressen. Personen får adgang når de logger ind."""
+    await require_role(request, "admin", pool_id)
+    if req.role not in ROLES:
+        raise HTTPException(400, "Ukendt rolle.")
+    email = req.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(400, "Ugyldig e-mail.")
+    async with _pool.acquire() as conn:
+        uid = await conn.fetchval("SELECT id FROM users WHERE email = $1", email)
+        if uid is None:
+            uid = await conn.fetchval(
+                "INSERT INTO users (email, name, initials) VALUES ($1, $2, $3) RETURNING id",
+                email,
+                req.name.strip() or email.split("@")[0],
+                req.initials.strip().upper()[:4] or email[:2].upper(),
+            )
+        await conn.execute(
+            """
+            INSERT INTO memberships (user_id, pool_id, role) VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, pool_id) DO UPDATE SET role = EXCLUDED.role
+            """,
+            uid,
+            pool_id,
+            req.role,
+        )
+    return {"ok": True, "user_id": uid}
+
+
+@app.delete("/api/pools/{pool_id}/users/{user_id}")
+async def remove_pool_user(pool_id: int, user_id: int, request: Request) -> dict:
+    me = await require_role(request, "admin", pool_id)
+    if me and me["id"] == user_id:
+        raise HTTPException(400, "Du kan ikke fjerne dig selv.")
+    async with _pool.acquire() as conn:
+        admins = await conn.fetchval(
+            "SELECT count(*) FROM memberships WHERE pool_id = $1 AND role = 'admin'",
+            pool_id,
+        )
+        target = await conn.fetchval(
+            "SELECT role FROM memberships WHERE pool_id = $1 AND user_id = $2",
+            pool_id,
+            user_id,
+        )
+        if target == "admin" and admins <= 1:
+            raise HTTPException(400, "Der skal være mindst én admin på adressen.")
+        await conn.execute(
+            "DELETE FROM memberships WHERE pool_id = $1 AND user_id = $2",
+            pool_id,
+            user_id,
+        )
+    return {"ok": True}
 
 
 @app.get("/api/weather")
