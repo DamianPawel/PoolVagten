@@ -1,8 +1,8 @@
 # TODO.md
 
 ## Nu
-- [ ] **Login etape 3/4:** luk `/api/state|plan|chat` bag login + rolletjek; tænd `REQUIRE_AUTH` i Railway.
-- [ ] **Login etape 4/4:** adresse-vælger, tilføj/slet adresse, brugeradministration (admin), skift kode.
+- [ ] **Tænd låsen:** sæt `REQUIRE_AUTH=1` i Railway (alt er bygget og deployet).
+- [ ] Tilføj BUH (elizabethtfrandsen@gmail.com) som **editor** under Indstillinger → Hvem har adgang.
 - [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
 - [ ] Tilføj husstandens profiler (initialer).
 - [ ] **Klor-doser:** indtast løbende klor + Klor Starter-chok når guiderne er modtaget (placeholdere står "doser følger" i UI'et og prompten).
@@ -24,6 +24,7 @@
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Login i fire etaper: backup + additivt skema, sessions/Google/e-mail-kode, rolletjek på alle endpoints, adresser + brugeradministration.
 - [x] Opfølgning på behandlinger (Ja/Nej efter 2 dage, med i AI-planen).
 - [x] Lokale doseringsforslag ud fra målinger (pH/ilt/klor vs. mål + satser).
 - [x] "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt.

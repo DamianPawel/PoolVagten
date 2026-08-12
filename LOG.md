@@ -2,6 +2,20 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Login etape 3+4/4: adgangskontrol, adresser og brugere
+**Etape 3 — adgangskontrol** (deployet, tændes med `REQUIRE_AUTH=1` i Railway):
+- `require_role()` på `state`, `weather`, `geocode`, `plan` og `chat`. No-op mens `REQUIRE_AUTH` er slukket, så deployet var risikofrit.
+- Rolle-regler håndhæves **server-side**, ikke kun i UI: da hele tilstanden er ét dokument, sammenlignes det indsendte med det gemte. Rollen `user` afvises hvis `config` ændres eller hvis `log`/`checks`/`readings` ryddes.
+- **Fanget undervejs:** `apiGetState` returnerede tidligere "tom" ved 401 → appen ville tro poolen var ny og **overskrive husstandens data med et blankt dokument**. Nu returneres `"denied"` eksplicit, og login-skærmen vises i stedet. Denne fejl ville have ramt præcis i det øjeblik låsen blev tændt.
+- Sikkerhedsventil: `/api/health` viser `admins` (antal), så vi kunne bevise at der fandtes en admin **før** tænding.
+
+**Etape 4 — adresser og brugere:**
+- `get_state`/`put_state` tager nu `pool_id`; `/api/state?pool=N` (default 1, så intet ældre gik i stykker). Aktiv adresse gemmes pr. enhed i `localStorage`.
+- `/api/pools`: list, opret (opretteren bliver admin på den nye), slet (kun admin, og aldrig den sidste adresse).
+- `/api/pools/{id}/users`: list, giv adgang via e-mail + rolle, skift rolle, fjern adgang. Værn: man kan ikke fjerne sig selv, og der skal altid være mindst én admin tilbage.
+- UI: `HouseholdView` i Indstillinger (adresseliste med skift/tilføj/slet + hvem-har-adgang med rollevælger). Log ud med navn, e-mail og rolle.
+- Invitation uden e-mail-tjeneste: admin tilføjer en e-mail, og personen får adgang første gang de logger ind med den.
+
 ## 2026-06-23 — Login etape 2/4: sessions, e-mail/kode og Google OAuth
 - **Ingen ny afhængighed:** kodehash med `hashlib.pbkdf2_hmac` (PBKDF2-SHA256, 240k runder, tilfældigt salt) og HMAC-signeret session-cookie — alt stdlib. Google-flowet kører på `httpx`, som vi allerede havde.
 - Cookie: `httponly`, `secure`, `samesite=lax`, 30 dage. Ingen server-side session-state (signeret token).

@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.3.0** (2026-06-23) — login (Google + e-mail/kode), roller pr. adresse (admin/editor/user), flere adresser pr. husstand, og lukkede API-endpoints bag login.
 **1.2.0** (2026-06-23) — opfølgning på behandlinger (Ja/Nej efter 2 dage), lokale doseringsforslag ud fra målinger, "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt, og delt spørgechat (/api/chat) der kender poolens data.
 **1.1.0** (2026-06-23) — dual-system (aktiv ilt/klor), desinfektionsform (OxyChock/CombiTabs), UV-filterlys, filtertype, udvidet + kildebekræftet produktkatalog.
 **1.0.0** (2026-06-23) — første scaffold: state-API, vejr- og plan-proxy, standalone frontend, profiler, auto-plan.
@@ -16,6 +17,15 @@
 - `uvLamp`: bool — reducerer løbende desinfektion (×0,6 vejledende), +2 pumpetimer, årlig pæreskift-opgave.
 - `filterType`: "sand" | "glass" | "cartridge" | "balls" — styrer returskyl/rens + flokningsmetode.
 - `useWaterfall`: bool — pH-overvågning.
+
+## Miljøvariabler (Railway)
+| Variabel | Formål |
+|---|---|
+| `DATABASE_URL` | Postgres (sættes af Railway) |
+| `ANTHROPIC_API_KEY` | Plan + chat, kun server-side |
+| `SESSION_SECRET` | Signerer session-cookies — **skift = alle logges ud** |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-login |
+| `REQUIRE_AUTH` | `1` = login kræves. Fjern variablen for at åbne appen igen (nødbremse) |
 
 ## Runtime
 - Python 3.11+
