@@ -209,10 +209,16 @@ function measureSuggestions(cfg, readings, d){
 /* ---------- backend api ---------- */
 async function apiGetState(){ try{ const r=await fetch("/api/state"); const j=await r.json(); return j && Object.keys(j).length?j:null; }catch{ return null; } }
 async function apiPutState(s){ try{ await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(s)}); }catch(e){ console.error(e); } }
+async function apiAuth(){ try{
+  const [meR,hR]=await Promise.all([fetch("/api/auth/me"),fetch("/api/health")]);
+  const me=await meR.json(); const h=await hR.json();
+  return { user:me.user||null, cfg:h.auth||{required:false,google:false,ready:false} };
+}catch{ return { user:null, cfg:{required:false,google:false,ready:false} }; } }
 
 /* ===================================================================== */
 function Poolvagten(){
   const [state,setState]=useState(null);
+  const [auth,setAuth]=useState(null);   // {user, cfg} — null indtil tjekket
   const [me,setMe]=useState(()=>{ try{ return localStorage.getItem("pool:me")||""; }catch{ return ""; } });
   const [tab,setTab]=useState("home");
   const [weather,setWeather]=useState(null);
@@ -224,6 +230,12 @@ function Poolvagten(){
   const [chatBusy,setChatBusy]=useState(false);
   const stateRef=useRef(null); stateRef.current=state;
   const autoTriedRef=useRef(false);
+
+  // Tjek login-status først. Er login ikke krævet (etape 2), fortsætter alt som før.
+  useEffect(()=>{ (async()=>{ const a=await apiAuth(); setAuth(a);
+    if(a.user&&a.user.initials&&!localStorage.getItem("pool:me")){ saveMe(a.user.initials); }
+  })(); },[]);
+  const needLogin=auth&&auth.cfg.required&&!auth.user;
 
   useEffect(()=>{ (async()=>{
     let s=await apiGetState();
@@ -381,6 +393,7 @@ REGLER:
     if(!weather&&!wErr)return; autoTriedRef.current=true; generatePlan();
   },[state,weather,wErr,planLoading]);
 
+  if(needLogin) return <LoginView google={auth.cfg.google}/>;
   if(!state) return <div style={{fontFamily:FONT,background:T.bg,minHeight:"100vh",display:"grid",placeItems:"center",color:T.sub}}>
     <div style={{display:"flex",alignItems:"center",gap:10}}><Droplets size={20} color={T.teal}/> Indlæser Poolvagten…</div></div>;
 
@@ -657,6 +670,44 @@ function LogView({log,onDelete}){
   </>;
 }
 
+function LoginView({google}){
+  const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState(null);
+  const [showPw,setShowPw]=useState(false);
+  const login=async()=>{ if(busy)return; setErr(null); setBusy(true);
+    try{ const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:pw})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.detail||"Login mislykkedes"); }
+      window.location.reload();
+    }catch(e){ setErr(e.message||"Login mislykkedes"); setBusy(false); } };
+  return <div style={{fontFamily:FONT,background:T.bg,minHeight:"100vh",display:"grid",placeItems:"center",padding:"24px 16px"}}>
+    <div style={{width:"100%",maxWidth:380}}>
+      <div style={{textAlign:"center",marginBottom:22}}>
+        <div style={{width:54,height:54,borderRadius:16,background:T.teal,display:"grid",placeItems:"center",margin:"0 auto 12px",boxShadow:`0 6px 18px ${T.aquaSoft}`}}><Waves size={28} color="#fff"/></div>
+        <div style={{fontSize:23,fontWeight:800,letterSpacing:-0.5,color:T.ink}}>Poolvagten</div>
+        <div style={{fontSize:13.5,color:T.sub,marginTop:5}}>Log ind for at se husstandens pool</div>
+      </div>
+      <div style={{...card,marginTop:0,padding:18}}>
+        {google&&<>
+          <a href="/api/auth/google/start" className="pv-btn" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:9,background:"#fff",color:T.ink,border:`1.5px solid ${T.line}`,borderRadius:11,padding:"12px",fontWeight:700,fontSize:14.5,textDecoration:"none",fontFamily:FONT}}>
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4285F4" d="M45 24c0-1.6-.1-2.7-.4-4H24v7.5h12c-.2 2-1.5 5-4.4 7l6.7 5.2C42.2 36.2 45 30.6 45 24z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.7-5.2c-1.9 1.3-4.4 2.2-7.8 2.2-5.9 0-11-4-12.8-9.4l-7 5.4C7.9 41 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.2 28.3c-.5-1.4-.7-2.8-.7-4.3s.3-3 .7-4.3l-7-5.4C2.9 17.2 2 20.5 2 24s.9 6.8 2.5 9.7l6.7-5.4z"/><path fill="#EA4335" d="M24 10.4c3.3 0 6.2 1.1 8.5 3.3l6-6C34.9 4.3 29.9 2 24 2 15.4 2 7.9 7 4.5 14.3l7 5.4C13.3 14.4 18.4 10.4 24 10.4z"/></svg>
+            Fortsæt med Google
+          </a>
+          <div style={{display:"flex",alignItems:"center",gap:10,margin:"16px 0 14px"}}>
+            <div style={{flex:1,height:1,background:T.line}}/><span style={{fontSize:11.5,color:T.sub}}>eller</span><div style={{flex:1,height:1,background:T.line}}/>
+          </div>
+        </>}
+        <input className="pv-in" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="E-mail" autoComplete="username" style={{...inStyle,marginBottom:9}}/>
+        <div style={{position:"relative",marginBottom:4}}>
+          <input className="pv-in" type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter")login(); }} placeholder="Kode" autoComplete="current-password" style={{...inStyle,paddingRight:58}}/>
+          <button className="pv-btn" type="button" onClick={()=>setShowPw(s=>!s)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.sub,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:FONT}}>{showPw?"Skjul":"Vis"}</button>
+        </div>
+        {err&&<div style={{fontSize:12.5,color:T.danger,margin:"8px 2px 0",lineHeight:1.45}}>{err}</div>}
+        <button className="pv-btn" onClick={login} disabled={busy} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:11,padding:"12px",fontWeight:800,fontSize:14.5,cursor:busy?"default":"pointer",fontFamily:FONT,marginTop:12,opacity:busy?.7:1}}>{busy?"Logger ind…":"Log ind"}</button>
+      </div>
+      <p style={{fontSize:11.5,color:T.sub,textAlign:"center",margin:"14px 8px 0",lineHeight:1.55}}>Har du ikke adgang endnu? Bed en admin i husstanden om at tilføje din e-mail.</p>
+    </div>
+  </div>;
+}
 function ChatView({chat,onSend,busy,onClear}){
   const [text,setText]=useState("");
   const endRef=useRef(null);
