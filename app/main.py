@@ -304,6 +304,13 @@ async def health() -> dict:
             out["admins"] = await conn.fetchval(
                 "SELECT count(*) FROM memberships WHERE role = 'admin'"
             )
+            # Brugere uden adgang til nogen adresse — de ville møde en låst dør.
+            out["orphans"] = await conn.fetchval(
+                """
+                SELECT count(*) FROM users u
+                 WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
+                """
+            )
     # Så frontend ved hvad der er muligt (aldrig selve hemmelighederne).
     out["auth"] = {
         "required": REQUIRE_AUTH,
