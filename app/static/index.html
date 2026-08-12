@@ -207,14 +207,16 @@ function measureSuggestions(cfg, readings, d){
 }
 
 /* ---------- backend api ---------- */
-async function apiGetState(){ try{ const r=await fetch("/api/state");
+function activePool(){ try{ return parseInt(localStorage.getItem("pool:active")||"1",10)||1; }catch{ return 1; } }
+function setActivePool(id){ try{ localStorage.setItem("pool:active",String(id)); }catch{} }
+async function apiGetState(){ try{ const r=await fetch(`/api/state?pool=${activePool()}`);
   // Vigtigt: uden login må vi ALDRIG returnere "tom" — så ville appen tro at
   // poolen er ny og overskrive husstandens data med et blankt dokument.
   if(r.status===401||r.status===403) return "denied";
   if(!r.ok) return null;
   const j=await r.json(); return j && Object.keys(j).length?j:null;
 }catch{ return null; } }
-async function apiPutState(s){ try{ await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(s)}); }catch(e){ console.error(e); } }
+async function apiPutState(s){ try{ await fetch(`/api/state?pool=${activePool()}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(s)}); }catch(e){ console.error(e); } }
 async function apiAuth(){ try{
   const [meR,hR]=await Promise.all([fetch("/api/auth/me"),fetch("/api/health")]);
   const me=await meR.json(); const h=await hR.json();
@@ -746,6 +748,85 @@ function ChatView({chat,onSend,busy,onClear}){
     <p style={{fontSize:11,color:T.sub,margin:"8px 4px 0",lineHeight:1.5}}>Svar er vejledende og via Anthropic. Samtalen deles med hele husstanden.</p>
   </>;
 }
+const ROLE_LABEL={admin:"Admin",editor:"Editor",user:"Bruger"};
+function HouseholdView({showToast,authUser}){
+  const [pools,setPools]=useState(null); const [users,setUsers]=useState(null);
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState(null);
+  const [email,setEmail]=useState(""); const [role,setRole]=useState("user");
+  const [newAddr,setNewAddr]=useState(""); const [adding,setAdding]=useState(false);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const pid=activePool();
+  const load=async()=>{ try{
+    const p=await (await fetch("/api/pools")).json(); setPools(p.pools||[]);
+    const u=await (await fetch(`/api/pools/${pid}/users`)).json(); setUsers(u.users||[]);
+  }catch{ setErr("Kunne ikke hente husstanden."); } };
+  useEffect(()=>{ load(); },[]);
+  const myRole=(pools||[]).find(p=>p.id===pid)?.role || (authUser?"user":"admin");
+  const isAdmin=myRole==="admin";
+  const call=async(url,opts,okMsg)=>{ setBusy(true); setErr(null);
+    try{ const r=await fetch(url,opts);
+      if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.detail||"Handlingen mislykkedes"); }
+      await load(); if(okMsg)showToast(okMsg); return true;
+    }catch(e){ setErr(e.message); return false; }
+    finally{ setBusy(false); } };
+  const addUser=async()=>{ if(!email.trim())return;
+    if(await call(`/api/pools/${pid}/users`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,role})},"Adgang givet")) setEmail(""); };
+  const addPool=async()=>{ if(!newAddr.trim())return;
+    if(await call("/api/pools",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:newAddr})},"Adresse tilføjet")){ setNewAddr(""); setAdding(false); } };
+  return <>
+    <SectionTitle icon={MapPin} title="Adresser"/>
+    <section style={{...card,padding:6}}>
+      {(pools||[]).map(p=>(
+        <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderBottom:`1px solid ${T.line}`}}>
+          <button className="pv-btn" onClick={()=>{ if(p.id!==pid){ setActivePool(p.id); window.location.reload(); } }} style={{flex:1,minWidth:0,textAlign:"left",background:"none",border:"none",cursor:"pointer",fontFamily:FONT,padding:0}}>
+            <div style={{fontSize:13.5,fontWeight:p.id===pid?800:600,color:p.id===pid?T.teal:T.ink}}>{p.name}{p.id===pid?" ·  aktiv":""}</div>
+            <div style={{fontSize:11.5,color:T.sub}}>Din rolle: {ROLE_LABEL[p.role]||p.role}</div>
+          </button>
+          {p.role==="admin"&&(pools||[]).length>1&&<button className="pv-btn" onClick={()=>{ if(confirmDel===p.id){ call(`/api/pools/${p.id}`,{method:"DELETE"},"Adresse slettet").then(()=>{ if(p.id===pid){ setActivePool(1); window.location.reload(); } }); setConfirmDel(null); } else { setConfirmDel(p.id); setTimeout(()=>setConfirmDel(c=>c===p.id?null:c),4000); } }} style={{...miniPill,background:confirmDel===p.id?T.danger:"none",color:confirmDel===p.id?"#fff":T.danger,border:`1.5px solid ${T.dangerBg}`,flexShrink:0}}>{confirmDel===p.id?"Slet?":"×"}</button>}
+        </div>
+      ))}
+      {pools===null&&<div style={{padding:"12px 10px",fontSize:13,color:T.sub}}>Henter…</div>}
+      {adding
+        ? <div style={{padding:"10px 8px",display:"flex",gap:8}}>
+            <input className="pv-in" autoFocus value={newAddr} onChange={e=>setNewAddr(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter")addPool(); }} placeholder="Fx Sommerhuset" style={{...inStyle,flex:1}}/>
+            <button className="pv-btn" onClick={addPool} disabled={busy} style={{background:T.teal,color:"#fff",border:"none",borderRadius:10,padding:"0 15px",fontWeight:700,fontSize:13.5,cursor:"pointer",fontFamily:FONT}}>Tilføj</button>
+          </div>
+        : <button className="pv-btn" onClick={()=>setAdding(true)} style={{width:"100%",textAlign:"left",background:"none",border:"none",padding:"11px 10px",cursor:"pointer",fontFamily:FONT,fontSize:13,fontWeight:700,color:T.teal}}>+ Tilføj adresse</button>}
+    </section>
+
+    <SectionTitle icon={Check} title="Hvem har adgang"/>
+    <section style={{...card,padding:6}}>
+      {(users||[]).map(u=>(
+        <div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px",borderBottom:`1px solid ${T.line}`}}>
+          <div style={{width:32,height:32,borderRadius:10,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{u.initials}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:600}}>{u.name||u.email}</div>
+            <div style={{fontSize:11.5,color:T.sub,overflow:"hidden",textOverflow:"ellipsis"}}>{u.email}</div>
+          </div>
+          {isAdmin&&authUser&&u.id!==authUser.id
+            ? <select value={u.role} onChange={e=>call(`/api/pools/${pid}/users`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:u.email,role:e.target.value})},"Rolle opdateret")} style={{...inStyle,width:"auto",padding:"6px 8px",fontSize:12,flexShrink:0}}>
+                {Object.keys(ROLE_LABEL).map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              </select>
+            : <span style={{...badge,background:T.aquaSoft,color:T.tealDeep,flexShrink:0}}>{ROLE_LABEL[u.role]||u.role}</span>}
+          {isAdmin&&authUser&&u.id!==authUser.id&&<button className="pv-btn" onClick={()=>call(`/api/pools/${pid}/users/${u.id}`,{method:"DELETE"},"Adgang fjernet")} title="Fjern adgang" style={{background:"none",border:"none",cursor:"pointer",color:T.danger,fontSize:17,lineHeight:1,padding:"0 4px",flexShrink:0}}>×</button>}
+        </div>
+      ))}
+      {users===null&&<div style={{padding:"12px 10px",fontSize:13,color:T.sub}}>Henter…</div>}
+      {users&&users.length===0&&<div style={{padding:"12px 10px",fontSize:13,color:T.sub}}>Ingen brugere endnu.</div>}
+      {isAdmin&&<div style={{padding:"10px 8px 8px",borderTop:(users||[]).length?`1px solid ${T.line}`:"none"}}>
+        <input className="pv-in" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter")addUser(); }} placeholder="E-mail på den der skal have adgang" style={{...inStyle,marginBottom:8}}/>
+        <div style={{display:"flex",gap:8}}>
+          <select value={role} onChange={e=>setRole(e.target.value)} style={{...inStyle,flex:1,padding:"9px 10px"}}>
+            {Object.keys(ROLE_LABEL).map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          </select>
+          <button className="pv-btn" onClick={addUser} disabled={busy} style={{background:T.teal,color:"#fff",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,fontSize:13.5,cursor:busy?"default":"pointer",fontFamily:FONT,opacity:busy?.6:1}}>Giv adgang</button>
+        </div>
+      </div>}
+    </section>
+    {err&&<p style={{fontSize:12.5,color:T.danger,margin:"10px 4px 0",lineHeight:1.5}}>{err}</p>}
+    <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.55}}><b>Admin</b> kan alt. <b>Editor</b> klarer den daglige drift og indstillinger, men ikke brugere eller sletning. <b>Bruger</b> registrerer det, der bliver gjort. Alle kan bruge chat, se plan og log. Personen får adgang, første gang de logger ind med e-mailen.</p>
+  </>;
+}
 function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
   const myRole=authUser&&(authUser.memberships||[]).length?authUser.memberships[0].role:null;
   const canEdit=!myRole||myRole==="admin"||myRole==="editor";   // uden login: som før
@@ -817,6 +898,8 @@ function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=u
       <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
       <button className="pv-btn" onClick={()=>{ if(confirmReset){ onReset(); setConfirmReset(false); showToast("Nulstillet"); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
     </> : <p style={{fontSize:12.5,color:T.sub,margin:"14px 4px 0",lineHeight:1.55,background:T.infoBg,padding:"11px 13px",borderRadius:12}}>Du har rollen <b>bruger</b> og kan registrere det, du gør ved poolen — men ikke ændre indstillinger. Spørg en admin i husstanden, hvis noget skal rettes.</p>}
+
+    <HouseholdView showToast={showToast} authUser={authUser}/>
 
     {authUser&&<section style={{...card,marginTop:16,padding:"13px 15px"}}>
       <div style={{display:"flex",alignItems:"center",gap:11}}>
