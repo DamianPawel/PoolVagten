@@ -443,18 +443,68 @@ async def google_callback(request: Request, code: str = "", state: str = ""):
     return resp
 
 
+# --------------------------------------------------------------------------- #
+# Adgangskontrol (etape 3). Alt herunder er en no-op så længe REQUIRE_AUTH
+# er slukket, så vi kan deploye trygt og tænde til sidst.
+# --------------------------------------------------------------------------- #
+def role_of(user: dict | None, pool_id: int = 1) -> str | None:
+    if not user:
+        return None
+    for m in user.get("memberships", []):
+        if m["pool_id"] == pool_id:
+            return m["role"]
+    return None
+
+
+async def require_role(request: Request, minimum: str = "user", pool_id: int = 1) -> dict | None:
+    """Kræv login og mindst den angivne rolle. Slukket → returnér None og luk op."""
+    if not REQUIRE_AUTH:
+        return None
+    user = await current_user(request)
+    if not user:
+        raise HTTPException(401, "Log ind for at bruge Poolvagten.")
+    role = role_of(user, pool_id)
+    if role is None:
+        raise HTTPException(403, "Du har ikke adgang til denne pool.")
+    rank = {"user": 0, "editor": 1, "admin": 2}
+    if rank.get(role, -1) < rank.get(minimum, 0):
+        raise HTTPException(403, "Din rolle giver ikke adgang til det her.")
+    user["role"] = role
+    return user
+
+
+def _emptied(old, new) -> bool:
+    """Blev en samling ryddet helt? (nulstil-knappen)"""
+    return bool(old) and not new
+
+
 @app.get("/api/state")
-async def read_state() -> dict:
+async def read_state(request: Request) -> dict:
+    await require_role(request, "user")
     return await get_state() or {}
 
 
 @app.put("/api/state")
-async def write_state(payload: dict) -> dict:
+async def write_state(payload: dict, request: Request) -> dict:
+    user = await require_role(request, "user")
+    # Rolle-regler håndhæves server-side, ikke kun i UI'et. Hele tilstanden er
+    # ét dokument, så vi sammenligner det indsendte med det gemte.
+    if user and user.get("role") == "user":
+        old = await get_state() or {}
+        if json.dumps(old.get("config"), sort_keys=True) != json.dumps(
+            payload.get("config"), sort_keys=True
+        ):
+            raise HTTPException(403, "Kun admin og editor kan ændre indstillinger.")
+        if any(
+            _emptied(old.get(k), payload.get(k)) for k in ("log", "checks", "readings")
+        ):
+            raise HTTPException(403, "Kun admin og editor kan nulstille.")
     return await put_state(payload)
 
 
 @app.get("/api/weather")
-async def weather(lat: float = 55.4486, lng: float = 10.6622) -> dict:
+async def weather(request: Request, lat: float = 55.4486, lng: float = 10.6622) -> dict:
+    await require_role(request, "user")
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lng}"
@@ -469,13 +519,14 @@ async def weather(lat: float = 55.4486, lng: float = 10.6622) -> dict:
 
 
 @app.get("/api/geocode")
-async def geocode(q: str) -> dict:
+async def geocode(request: Request, q: str) -> dict:
     """Slå en fri-tekst-adresse op → bredde/længdegrad via Nominatim (OpenStreetMap).
 
     Gratis og uden nøgle, ligesom vejr-proxyen. Nominatim kræver en sigende
     User-Agent. Gade-niveau, så man kan indtaste en fuld adresse i stedet for
     selv at finde koordinater.
     """
+    await require_role(request, "editor")   # adresse hører til indstillinger
     q = (q or "").strip()
     if not q:
         raise HTTPException(400, "Tom adresse.")
@@ -548,7 +599,8 @@ class PlanRequest(BaseModel):
 
 
 @app.post("/api/plan")
-async def plan(req: PlanRequest) -> dict:
+async def plan(req: PlanRequest, request: Request) -> dict:
+    await require_role(request, "user")
     text = await _anthropic({"messages": [{"role": "user", "content": req.prompt}]}, max_tokens=1000)
     return {"text": text}
 
@@ -564,7 +616,8 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest) -> dict:
+async def chat(req: ChatRequest, request: Request) -> dict:
+    await require_role(request, "user")
     msgs = [{"role": m.role, "content": m.content} for m in req.messages][-20:]
     # Anthropic kræver at samtalen starter med en bruger-besked.
     while msgs and msgs[0]["role"] != "user":

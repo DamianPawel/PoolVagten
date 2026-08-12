@@ -207,7 +207,13 @@ function measureSuggestions(cfg, readings, d){
 }
 
 /* ---------- backend api ---------- */
-async function apiGetState(){ try{ const r=await fetch("/api/state"); const j=await r.json(); return j && Object.keys(j).length?j:null; }catch{ return null; } }
+async function apiGetState(){ try{ const r=await fetch("/api/state");
+  // Vigtigt: uden login må vi ALDRIG returnere "tom" — så ville appen tro at
+  // poolen er ny og overskrive husstandens data med et blankt dokument.
+  if(r.status===401||r.status===403) return "denied";
+  if(!r.ok) return null;
+  const j=await r.json(); return j && Object.keys(j).length?j:null;
+}catch{ return null; } }
 async function apiPutState(s){ try{ await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(s)}); }catch(e){ console.error(e); } }
 async function apiAuth(){ try{
   const [meR,hR]=await Promise.all([fetch("/api/auth/me"),fetch("/api/health")]);
@@ -237,8 +243,10 @@ function Poolvagten(){
   })(); },[]);
   const needLogin=auth&&auth.cfg.required&&!auth.user;
 
-  useEffect(()=>{ (async()=>{
+  // Vent til login er afklaret, så vi aldrig henter (eller skriver) uden adgang.
+  useEffect(()=>{ if(!auth||needLogin)return; (async()=>{
     let s=await apiGetState();
+    if(s==="denied"){ setAuth(a=>({...a,user:null,cfg:{...a.cfg,required:true}})); return; }
     if(!s){ s={ config:DEFAULT_CONFIG, checks:{}, log:[], readings:{}, plan:null, profiles:[], followups:[], chat:[], updatedAt:Date.now() }; await apiPutState(s); }
     if(!s.config.rates)s.config.rates=DEFAULT_CONFIG.rates;
     s.config.rates={...DEFAULT_CONFIG.rates,...s.config.rates};   // flet nye satser ind i gammel state
@@ -251,9 +259,9 @@ function Poolvagten(){
     if(!s.followups)s.followups=[];
     if(!s.chat)s.chat=[];
     setState(s);
-  })(); },[]);
+  })(); },[auth,needLogin]);
 
-  useEffect(()=>{ const iv=setInterval(async()=>{ const r=await apiGetState(); const c=stateRef.current; if(r&&c&&r.updatedAt>(c.updatedAt||0))setState(r); },20000); return ()=>clearInterval(iv); },[]);
+  useEffect(()=>{ const iv=setInterval(async()=>{ const r=await apiGetState(); const c=stateRef.current; if(r&&r!=="denied"&&c&&r.updatedAt>(c.updatedAt||0))setState(r); },20000); return ()=>clearInterval(iv); },[]);
 
   const cfg=state?.config;
   useEffect(()=>{ if(!cfg)return; let dead=false; (async()=>{ try{
@@ -510,7 +518,7 @@ REGLER:
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
         {tab==="log" && <LogView log={state.log||[]} onDelete={deleteLog}/>}
         {tab==="chat" && <ChatView chat={state.chat||[]} onSend={sendChat} busy={chatBusy} onClear={()=>mutate(s=>({...s,chat:[]}))}/>}
-        {tab==="settings" && <SettingsView cfg={cfg} onSave={c=>mutate(s=>({...s,config:c}))} showToast={showToast}
+        {tab==="settings" && <SettingsView cfg={cfg} onSave={c=>mutate(s=>({...s,config:c}))} showToast={showToast} authUser={auth&&auth.user}
           onReset={()=>mutate(s=>({...s,checks:{},log:[],readings:{},plan:null}))}/>}
       </div>
 
@@ -738,7 +746,9 @@ function ChatView({chat,onSend,busy,onClear}){
     <p style={{fontSize:11,color:T.sub,margin:"8px 4px 0",lineHeight:1.5}}>Svar er vejledende og via Anthropic. Samtalen deles med hele husstanden.</p>
   </>;
 }
-function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
+function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=useState(cfg); const [advanced,setAdvanced]=useState(false); const [confirmReset,setConfirmReset]=useState(false);
+  const myRole=authUser&&(authUser.memberships||[]).length?authUser.memberships[0].role:null;
+  const canEdit=!myRole||myRole==="admin"||myRole==="editor";   // uden login: som før
   const [addr,setAddr]=useState(""); const [geoBusy,setGeoBusy]=useState(false); const [geoErr,setGeoErr]=useState(null);
   const set=(k,v)=>setF(s=>({...s,[k]:v})); const setRate=(k,v)=>setF(s=>({...s,rates:{...s.rates,[k]:parseFloat(v)||0}})); const save=()=>{ onSave(f); showToast("Gemt"); };
   const findAddr=async()=>{ const q=addr.trim(); if(!q)return; setGeoBusy(true); setGeoErr(null);
@@ -803,8 +813,21 @@ function SettingsView({cfg,onSave,onReset,showToast}){ const [f,setF]=useState(c
       <p style={{fontSize:11.5,color:T.sub,margin:"6px 2px 0",lineHeight:1.5}}>Standardtallene følger Swim & Funs vejledning (pr. 10.000 L, undtagen SeaKlear pr. 2.000 L). Justér kun hvis din etikette siger noget andet.</p>
     </section>}
 
-    <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
-    <button className="pv-btn" onClick={()=>{ if(confirmReset){ onReset(); setConfirmReset(false); showToast("Nulstillet"); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
+    {canEdit ? <>
+      <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
+      <button className="pv-btn" onClick={()=>{ if(confirmReset){ onReset(); setConfirmReset(false); showToast("Nulstillet"); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
+    </> : <p style={{fontSize:12.5,color:T.sub,margin:"14px 4px 0",lineHeight:1.55,background:T.infoBg,padding:"11px 13px",borderRadius:12}}>Du har rollen <b>bruger</b> og kan registrere det, du gør ved poolen — men ikke ændre indstillinger. Spørg en admin i husstanden, hvis noget skal rettes.</p>}
+
+    {authUser&&<section style={{...card,marginTop:16,padding:"13px 15px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:34,height:34,borderRadius:10,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12.5,fontWeight:800,flexShrink:0}}>{authUser.initials||"?"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13.5,fontWeight:600}}>{authUser.name||authUser.email}</div>
+          <div style={{fontSize:11.5,color:T.sub}}>{authUser.email}{myRole?` · ${({admin:"Admin",editor:"Editor",user:"Bruger"})[myRole]||myRole}`:""}</div>
+        </div>
+        <button className="pv-btn" onClick={async()=>{ await fetch("/api/auth/logout",{method:"POST"}); window.location.reload(); }} style={{...miniPill,background:"none",color:T.danger,border:`1.5px solid ${T.dangerBg}`,flexShrink:0}}>Log ud</button>
+      </div>
+    </section>}
   </>;
 }
 const Field=({label,children})=><div style={{marginBottom:12,flex:1}}><div style={{fontSize:12,fontWeight:600,color:T.sub,marginBottom:5}}>{label}</div>{children}</div>;
