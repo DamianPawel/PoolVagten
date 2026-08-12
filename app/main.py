@@ -11,14 +11,20 @@ Bevidst holdt minimal: én tabel med ét JSON-dokument = "uhyrligt nemt".
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import os
+import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,6 +33,17 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 # Reservemodel hvis den primære er overbelastet (529). Haiku er hurtigere/mindre presset.
 FALLBACK_MODEL = os.getenv("CLAUDE_FALLBACK_MODEL", "claude-haiku-4-5-20251001")
+
+# --- Login (etape 2) ------------------------------------------------------- #
+SESSION_SECRET = os.getenv("SESSION_SECRET", "")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+# Eksplicit kontakt: så længe denne er slukket, er alle endpoints åbne som før.
+# Tændes først i etape 3, når login er testet.
+REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "").strip().lower() in ("1", "true", "yes")
+COOKIE = "pv_session"
+SESSION_DAYS = 30
+ROLES = ("admin", "editor", "user")
 
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
@@ -92,6 +109,141 @@ async def _db_init() -> None:
         )
 
 
+# --------------------------------------------------------------------------- #
+# Login: koder, sessions og brugere. Alt med stdlib — ingen ny afhængighed.
+# --------------------------------------------------------------------------- #
+def _b64e(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _b64d(txt: str) -> bytes:
+    return base64.urlsafe_b64decode(txt + "=" * (-len(txt) % 4))
+
+
+def hash_password(password: str) -> str:
+    """PBKDF2-SHA256 med tilfældigt salt. Koden gemmes aldrig i klartekst."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 240_000)
+    return f"pbkdf2$240000${_b64e(salt)}${_b64e(dk)}"
+
+
+def verify_password(password: str, stored: str | None) -> bool:
+    if not stored:
+        return False
+    try:
+        algo, rounds, salt_b64, dk_b64 = stored.split("$")
+        if algo != "pbkdf2":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), _b64d(salt_b64), int(rounds)
+        )
+        return hmac.compare_digest(dk, _b64d(dk_b64))
+    except Exception:
+        return False
+
+
+def make_session(user_id: int) -> str:
+    """Signeret session-token: base64(payload).base64(hmac). Ingen server-side state."""
+    payload = json.dumps(
+        {"uid": user_id, "exp": int(time.time()) + SESSION_DAYS * 86400}
+    ).encode()
+    sig = hmac.new(SESSION_SECRET.encode(), payload, hashlib.sha256).digest()
+    return f"{_b64e(payload)}.{_b64e(sig)}"
+
+
+def read_session(token: str | None) -> int | None:
+    if not token or not SESSION_SECRET or "." not in token:
+        return None
+    try:
+        body, sig = token.split(".", 1)
+        raw = _b64d(body)
+        expect = hmac.new(SESSION_SECRET.encode(), raw, hashlib.sha256).digest()
+        if not hmac.compare_digest(expect, _b64d(sig)):
+            return None
+        data = json.loads(raw)
+        if data.get("exp", 0) < time.time():
+            return None
+        return int(data["uid"])
+    except Exception:
+        return None
+
+
+def set_session_cookie(resp: Response, user_id: int) -> None:
+    resp.set_cookie(
+        COOKIE,
+        make_session(user_id),
+        max_age=SESSION_DAYS * 86400,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+async def user_by_id(uid: int) -> dict | None:
+    if not _pool:
+        return None
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, email, name, initials FROM users WHERE id = $1", uid
+        )
+        if not row:
+            return None
+        user = dict(row)
+        mem = await conn.fetch(
+            "SELECT pool_id, role FROM memberships WHERE user_id = $1 ORDER BY pool_id",
+            uid,
+        )
+        user["memberships"] = [dict(m) for m in mem]
+        return user
+
+
+async def current_user(request: Request) -> dict | None:
+    uid = read_session(request.cookies.get(COOKIE))
+    return await user_by_id(uid) if uid else None
+
+
+async def upsert_login(email: str, name: str, google_sub: str | None) -> dict:
+    """Find eller opret brugeren, og giv den allerførste bruger admin.
+
+    Bootstrap: er brugertabellen tom, bliver den første der logger ind admin på
+    alle eksisterende adresser. Derefter tilføjer admin selv resten. Sådan
+    slipper vi for at lægge e-mailadresser eller koder i koden.
+    """
+    email = email.strip().lower()
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
+        if row is None:
+            first = (await conn.fetchval("SELECT count(*) FROM users")) == 0
+            initials = "".join(p[0] for p in name.split()[:2]).upper() or email[:2].upper()
+            uid = await conn.fetchval(
+                """
+                INSERT INTO users (email, name, initials, google_sub)
+                VALUES ($1, $2, $3, $4) RETURNING id
+                """,
+                email,
+                name or email.split("@")[0],
+                initials,
+                google_sub,
+            )
+            if first:
+                await conn.execute(
+                    """
+                    INSERT INTO memberships (user_id, pool_id, role)
+                    SELECT $1, id, 'admin' FROM pool_state
+                    ON CONFLICT DO NOTHING
+                    """,
+                    uid,
+                )
+        else:
+            uid = row["id"]
+            if google_sub and not row["google_sub"]:
+                await conn.execute(
+                    "UPDATE users SET google_sub = $1 WHERE id = $2", google_sub, uid
+                )
+    return await user_by_id(uid)
+
+
 async def get_state() -> dict | None:
     if _pool:
         async with _pool.acquire() as conn:
@@ -145,7 +297,150 @@ async def health() -> dict:
             out["named"] = await conn.fetchval(
                 "SELECT count(*) FROM pool_state WHERE name IS NOT NULL"
             )
+    # Så frontend ved hvad der er muligt (aldrig selve hemmelighederne).
+    out["auth"] = {
+        "required": REQUIRE_AUTH,
+        "google": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+        "ready": bool(SESSION_SECRET),
+    }
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Auth (etape 2). Endpoints er stadig åbne — REQUIRE_AUTH tændes i etape 3.
+# --------------------------------------------------------------------------- #
+def _redirect_uri(request: Request) -> str:
+    base = str(request.base_url).rstrip("/")
+    # Railway terminerer TLS foran os, så base_url kan se ud som http — Google
+    # kræver at redirect_uri matcher præcis. Localhost får lov at blive http.
+    if base.startswith("http://") and "localhost" not in base and "127.0.0.1" not in base:
+        base = "https://" + base[len("http://"):]
+    return f"{base}/api/auth/google/callback"
+
+
+@app.get("/api/auth/me")
+async def auth_me(request: Request) -> dict:
+    user = await current_user(request)
+    return {"user": user}
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/login")
+async def auth_login(req: LoginRequest, response: Response) -> dict:
+    if not SESSION_SECRET:
+        raise HTTPException(500, "SESSION_SECRET er ikke sat på serveren.")
+    if not _pool:
+        raise HTTPException(500, "Login kræver en database.")
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, password_hash FROM users WHERE email = $1",
+            req.email.strip().lower(),
+        )
+    # Samme svar uanset om e-mailen findes — så man ikke kan gætte brugere.
+    if not row or not verify_password(req.password, row["password_hash"]):
+        raise HTTPException(401, "Forkert e-mail eller kode.")
+    set_session_cookie(response, row["id"])
+    return {"user": await user_by_id(row["id"])}
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(response: Response) -> dict:
+    response.delete_cookie(COOKIE, path="/")
+    return {"ok": True}
+
+
+class PasswordRequest(BaseModel):
+    password: str
+
+
+@app.post("/api/auth/password")
+async def auth_set_password(req: PasswordRequest, request: Request) -> dict:
+    """Sæt/skift din egen kode (kræver at man allerede er logget ind)."""
+    user = await current_user(request)
+    if not user:
+        raise HTTPException(401, "Log ind først.")
+    if len(req.password) < 8:
+        raise HTTPException(400, "Koden skal være mindst 8 tegn.")
+    async with _pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
+            hash_password(req.password),
+            user["id"],
+        )
+    return {"ok": True}
+
+
+@app.get("/api/auth/google/start")
+async def google_start(request: Request):
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and SESSION_SECRET):
+        raise HTTPException(500, "Google-login er ikke konfigureret på serveren.")
+    # CSRF-beskyttelse: signeret state med kort levetid, ingen server-side state.
+    raw = json.dumps({"n": secrets.token_urlsafe(12), "exp": int(time.time()) + 600}).encode()
+    sig = hmac.new(SESSION_SECRET.encode(), raw, hashlib.sha256).digest()
+    state = f"{_b64e(raw)}.{_b64e(sig)}"
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(
+        {
+            "client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": _redirect_uri(request),
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "prompt": "select_account",
+        }
+    )
+    return RedirectResponse(url, status_code=302)
+
+
+@app.get("/api/auth/google/callback")
+async def google_callback(request: Request, code: str = "", state: str = ""):
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and SESSION_SECRET):
+        raise HTTPException(500, "Google-login er ikke konfigureret på serveren.")
+    # Verificér state (CSRF)
+    try:
+        body, sig = state.split(".", 1)
+        raw = _b64d(body)
+        expect = hmac.new(SESSION_SECRET.encode(), raw, hashlib.sha256).digest()
+        if not hmac.compare_digest(expect, _b64d(sig)):
+            raise ValueError
+        if json.loads(raw).get("exp", 0) < time.time():
+            raise ValueError
+    except Exception:
+        raise HTTPException(400, "Ugyldigt login-forsøg. Prøv igen.")
+    if not code:
+        raise HTTPException(400, "Login blev afbrudt.")
+    async with httpx.AsyncClient(timeout=15) as client:
+        tok = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": _redirect_uri(request),
+                "grant_type": "authorization_code",
+            },
+        )
+        if tok.status_code != 200:
+            raise HTTPException(502, f"Google afviste login: {tok.text[:200]}")
+        id_token = tok.json().get("id_token", "")
+        # Lad Google selv validere signaturen på id_token.
+        info = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo", params={"id_token": id_token}
+        )
+        if info.status_code != 200:
+            raise HTTPException(502, "Kunne ikke bekræfte Google-kontoen.")
+        claims = info.json()
+    if claims.get("aud") != GOOGLE_CLIENT_ID or not claims.get("email"):
+        raise HTTPException(400, "Google-kontoen kunne ikke bekræftes.")
+    if str(claims.get("email_verified", "true")).lower() not in ("true", "1"):
+        raise HTTPException(400, "Din Google-mail er ikke bekræftet.")
+    user = await upsert_login(claims["email"], claims.get("name", ""), claims.get("sub"))
+    resp = RedirectResponse("/", status_code=302)
+    set_session_cookie(resp, user["id"])
+    return resp
 
 
 @app.get("/api/state")
