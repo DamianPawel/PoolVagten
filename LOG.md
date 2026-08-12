@@ -2,6 +2,17 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Login etape 1/4: backup + additivt skema
+**Eskaleret og godkendt af mennesket** (CLAUDE.md kræver eskalering ved datamodel, hemmeligheder og adgangskontrol). Aftalt i pingpong: Google-login + e-mail/kode, håndkodet (ingen managed auth), roller admin/editor/user pr. adresse, flere adresser pr. husstand, og `/api/state|plan|chat` lukkes bag login i etape 3.
+
+- **Backup taget først:** `backups/pool_state-backup-2026-06-23.json` (22,6 KB — Revninge Bygade, DP+BUH, 60 log-poster, 104 checks). Verificeret fri for hemmeligheder.
+- **Nøgleindsigt — ingen data flyttes:** `pool_state.id` bruges som pool-id, så den eksisterende række (id=1) *er* husstandens første adresse. Ingen UPDATE af JSON-dokumentet, ingen kopiering.
+- Additivt skema: `pool_state` + kolonnen `name`; nye tabeller `users` (email, navn, initialer, password_hash, google_sub) og `memberships` (user_id + pool_id + rolle). Kun `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` — ingen DROP.
+- Første adresse navngives fra sin egen `config.locationName` (kun hvis `name` er NULL).
+- `/api/health` returnerer nu tællinger (pools/users/named) så migreringen kan verificeres live uden at lække indhold.
+- Ingen UI- eller adfærdsændring i denne etape — appen kører præcis som før.
+- Planlagt: auth aktiveres først når `SESSION_SECRET` + `GOOGLE_CLIENT_ID` er sat, så appen aldrig er i stykker undervejs. Password-hashing via `hashlib.pbkdf2_hmac` (stdlib) og Google-flow via `httpx` → **ingen ny afhængighed**.
+
 ## 2026-06-23 — Frisk vandtemp fører; luft/vejr udfylder
 - Frisk målt vandtemp (≤ `TEMP_FRESH_MS` = 2 dage) styrer nu **pumpetimer** (`pumpHours(vandtemp)`) og **varme-varsel** (vand ≥ 25 °C). Er der ingen frisk måling, bruges luft-forecast som før (luft ≥ 22 °C).
 - Varme-varslet er kilde-bevidst: viser målt badevandstemp når den fører, ellers "varmt vejr".

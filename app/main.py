@@ -55,6 +55,41 @@ async def _db_init() -> None:
             )
             """
         )
+        # --- Etape 1: additive skema til login/adresser -------------------- #
+        # Rører IKKE eksisterende rækker: pool_state.id ER pool-id'et, så den
+        # nuværende række (id=1) bliver simpelthen husstandens første adresse.
+        await conn.execute("ALTER TABLE pool_state ADD COLUMN IF NOT EXISTS name TEXT")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id            SERIAL PRIMARY KEY,
+                email         TEXT UNIQUE NOT NULL,
+                name          TEXT NOT NULL DEFAULT '',
+                initials      TEXT NOT NULL DEFAULT '',
+                password_hash TEXT,
+                google_sub    TEXT UNIQUE,
+                created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memberships (
+                user_id INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                pool_id INT  NOT NULL REFERENCES pool_state(id) ON DELETE CASCADE,
+                role    TEXT NOT NULL DEFAULT 'user',
+                PRIMARY KEY (user_id, pool_id)
+            )
+            """
+        )
+        # Navngiv første adresse ud fra dens egen config (kun hvis den mangler navn).
+        await conn.execute(
+            """
+            UPDATE pool_state
+               SET name = COALESCE(NULLIF(data->'config'->>'locationName', ''), 'Min pool')
+             WHERE name IS NULL
+            """
+        )
 
 
 async def get_state() -> dict | None:
@@ -101,7 +136,16 @@ app = FastAPI(title="Poolvagten", version="1.2.0", lifespan=lifespan)
 # --------------------------------------------------------------------------- #
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True, "db": bool(_pool)}
+    out = {"ok": True, "db": bool(_pool)}
+    if _pool:
+        async with _pool.acquire() as conn:
+            # Kun tællinger — ingen indhold — så migreringen kan verificeres.
+            out["pools"] = await conn.fetchval("SELECT count(*) FROM pool_state")
+            out["users"] = await conn.fetchval("SELECT count(*) FROM users")
+            out["named"] = await conn.fetchval(
+                "SELECT count(*) FROM pool_state WHERE name IS NOT NULL"
+            )
+    return out
 
 
 @app.get("/api/state")

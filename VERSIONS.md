@@ -5,6 +5,11 @@
 **1.1.0** (2026-06-23) — dual-system (aktiv ilt/klor), desinfektionsform (OxyChock/CombiTabs), UV-filterlys, filtertype, udvidet + kildebekræftet produktkatalog.
 **1.0.0** (2026-06-23) — første scaffold: state-API, vejr- og plan-proxy, standalone frontend, profiler, auto-plan.
 
+## Datamodel (Postgres)
+- `pool_state(id, name, data JSONB, updated_at)` — **én række pr. adresse/pool**; `id` er pool-id'et, `data` er husstandens JSON-dokument. Række 1 = den oprindelige pool.
+- `users(id, email, name, initials, password_hash, google_sub, created_at)` — login. Koder hashes med `hashlib.pbkdf2_hmac` (stdlib).
+- `memberships(user_id, pool_id, role)` — rolle **pr. adresse**: `admin` (alt, inkl. brugere og sletning), `editor` (daglig drift, ikke brugere/sletning), `user` (registrere udført arbejde). Alle roller må bruge chat, se plan og log.
+
 ## Konfigurationsflag (ét JSON-dokument, `config`)
 - `system`: "oxygen" | "chlorine" — styrer trin 2-produkter, måleværdier og AI-prompt.
 - `oxygenForm`: "oxychock" | "combitabs" (kun ved system=oxygen).
