@@ -1,6 +1,8 @@
 # TODO.md
 
 ## Nu
+- [ ] **Login etape 3/4:** luk `/api/state|plan|chat` bag login + rolletjek; tænd `REQUIRE_AUTH` i Railway.
+- [ ] **Login etape 4/4:** adresse-vælger, tilføj/slet adresse, brugeradministration (admin), skift kode.
 - [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
 - [ ] Tilføj husstandens profiler (initialer).
 - [ ] **Klor-doser:** indtast løbende klor + Klor Starter-chok når guiderne er modtaget (placeholdere står "doser følger" i UI'et og prompten).

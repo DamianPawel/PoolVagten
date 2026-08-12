@@ -2,6 +2,17 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Login etape 2/4: sessions, e-mail/kode og Google OAuth
+- **Ingen ny afhængighed:** kodehash med `hashlib.pbkdf2_hmac` (PBKDF2-SHA256, 240k runder, tilfældigt salt) og HMAC-signeret session-cookie — alt stdlib. Google-flowet kører på `httpx`, som vi allerede havde.
+- Cookie: `httponly`, `secure`, `samesite=lax`, 30 dage. Ingen server-side session-state (signeret token).
+- Endpoints: `/api/auth/` → `me`, `login`, `logout`, `password`, `google/start`, `google/callback`.
+- Google-flow verificerer **state** (CSRF, 10 min levetid), **aud** (skal matche vores client id) og **email_verified**. `id_token` valideres hos Google via tokeninfo, så vi ikke selv skal håndtere JWKS.
+- Login-fejl giver samme besked uanset om e-mailen findes → ingen bruger-optælling udefra.
+- **Bootstrap uden hemmeligheder i koden:** er `users` tom, bliver den første der logger ind admin på alle eksisterende adresser. Derefter tilføjer admin resten. Ingen e-mails eller koder i repoet.
+- Frontend: `LoginView` (Google-knap + e-mail/kode). Appen tjekker login ved opstart og henter initialer fra brugeren.
+- **Stadig slukket:** `REQUIRE_AUTH` er ikke sat, så alle endpoints er åbne som før og familien mærker intet. Tændes i etape 3.
+- Verificeret live: `auth.google=true`, `auth.ready=true`, `auth.required=false`, `/api/state` → 200, Google-redirect peger korrekt på callback.
+
 ## 2026-06-23 — Login etape 1/4: backup + additivt skema
 **Eskaleret og godkendt af mennesket** (CLAUDE.md kræver eskalering ved datamodel, hemmeligheder og adgangskontrol). Aftalt i pingpong: Google-login + e-mail/kode, håndkodet (ingen managed auth), roller admin/editor/user pr. adresse, flere adresser pr. husstand, og `/api/state|plan|chat` lukkes bag login i etape 3.
 
