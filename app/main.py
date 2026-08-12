@@ -297,6 +297,10 @@ async def health() -> dict:
             out["named"] = await conn.fetchval(
                 "SELECT count(*) FROM pool_state WHERE name IS NOT NULL"
             )
+            # Sikkerhedsventil: vi må aldrig tænde REQUIRE_AUTH uden en admin.
+            out["admins"] = await conn.fetchval(
+                "SELECT count(*) FROM memberships WHERE role = 'admin'"
+            )
     # Så frontend ved hvad der er muligt (aldrig selve hemmelighederne).
     out["auth"] = {
         "required": REQUIRE_AUTH,
