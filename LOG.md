@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — "Spørg"-chatten: kildegrundlag og emne-afgrænsning
+- Chatten stod tidligere kun på poolens egne tal. Nu får den `GUIDE`-konstanten med **Swim & Funs retningslinjer**: trin 1–4-rækkefølgen, håndteringsreglerne ("må aldrig blandes", egen spand, vand først, pumpen kører), de dokumenterede ventetider, og behandlingsforløbene for grønt/mælkehvidt/tåget vand. Plus kildelinks den kan henvise til.
+- Læste yderligere artikler til grundlaget: mælkehvidt vand, tåget/uklart vand, viden om klor og aktiv ilt. Alle tre problemløsnings-artikler følger samme forløb: rengør/filter → pH → chok → flokning (24 t) → fjern bundfald.
+- **Fakta-regel:** chatten må ikke opfinde doseringstal eller ventetider; er noget ikke dækket, henviser den til etiketten eller swim-fun.com.
+- **Emne-afgrænsning håndhæves server-side.** `TOPIC_RULE` i `main.py` sættes altid forrest i system-prompten, uanset hvad browseren sender. Frontend sender poolens data som system-prompt, og den kunne en klient ændre — derfor ligger selve begrænsningen på serveren. Reglen dækker også forsøg på at få den til at ignorere sine instruktioner.
+- Note fra kilderne: Swim & Fun skriver at *"Aktiv ilt og Klor er kompatibelt"* og anbefaler klor-chok hver 14. dag til aktiv ilt-pools. Appens UI holder fortsat systemerne adskilt efter brugerens ønske, men chatten kan svare korrekt hvis der spørges direkte.
+
 ## 2026-06-23 — Nulstil kræver nu at man skriver SLET
 - Nulstil er tre trin: tryk → "Tryk igen for at nulstille log & plan" → popup hvor man skal skrive **SLET**. Knappen i popuppen er deaktiveret indtil teksten er korrekt (accepterer små bogstaver og mellemrum via trim+uppercase). Annullér, Escape og klik udenfor lukker uden at slette.
 - Rollegating var allerede på plads i begge lag: UI viser kun knappen for admin/editor (`canEdit`), og serveren afviser en `user` der forsøger at rydde. Tilføjede `plan` til serverens beskyttede felter, så hele nulstillingen er dækket.
