@@ -809,6 +809,9 @@ function TrendView({history,system}){
           <g key={i}><line x1={L} y1={Y(v)} x2={W-R} y2={Y(v)} stroke={T.aqua} strokeWidth="1" strokeDasharray="3 3"/>
           <text x={L-5} y={Y(v)+3.5} textAnchor="end" fontSize="9" fill={T.teal}>{fmt(v)}</text></g>
         ))}
+        {!target&&[Math.min(...vs),Math.max(...vs)].map((v,i)=>(
+          <text key={i} x={L-5} y={Y(v)+3.5} textAnchor="end" fontSize="9" fill={T.sub}>{fmt(v)}</text>
+        ))}
         <line x1={L} y1={H-B} x2={W-R} y2={H-B} stroke={T.line} strokeWidth="1"/>
         {pts.length>1&&<path d={line} fill="none" stroke={T.teal} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>}
         {pts.map((p,i)=>(
