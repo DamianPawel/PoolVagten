@@ -84,21 +84,42 @@ const BUCKET_ORDER = ["Dagligt","Ugentligt","Månedligt","Årligt"];
 const READING_LABEL = { ph:"pH", oxy:"aktiv ilt", klor:"frit klor", temp:"vandtemp" };
 const READING_UNIT = { ph:"", oxy:" mg/l", klor:" mg/l", temp:" °C" };
 const TEMP_FRESH_MS = 2*86400000;   // målt vandtemp "gælder" som styrende i 2 dage; ellers luft/vejr
-/* Fremgangsmåde pr. produkt — vises foldet ud når man trykker på navnet i "Dine doser". */
+/* Swim & Funs egen trin-inddeling af produkterne = den rigtige rækkefølge. */
+const STEPS = [
+  { n:1, title:"Trin 1 · pH-balance",  note:"Justér altid pH FØRST. Vandplejemidlerne virker bedst ved pH 7,0–7,4." },
+  { n:2, title:"Trin 2 · Desinfektion", note:"Når pH er i orden, desinficeres vandet." },
+  { n:3, title:"Trin 3 · Klar pool",    note:"Holder vandet klart og forebygger belægninger." },
+  { n:4, title:"Trin 4 · Flokning",     note:"Samler de sidste svævepartikler, så filteret kan tage dem." },
+];
+const DOSE_STEP = {
+  "pH-Minus":1, "pH-Plus":1, "Metal Out":1,
+  "OxyChock + Aktivator":2, "OxyChock (alt. dagligt)":2, "OxyChock chok (grønt vand)":2,
+  "CombiTabs":2, "Klor løbende":2, "Klor-chok (grønt vand)":2, "Sæsonstart":2,
+  "KlarPool":3,
+  "FlokPool (uklart vand)":4, "SeaKlear":4,
+};
+/* Fremgangsmåde pr. produkt — ordlyd følger Swim & Funs egne produktsider (se VERSIONS.md). */
 const DOSE_INFO = {
-  "OxyChock + Aktivator": "Den løbende desinfektion. Opløs OxyChock i en spand lunkent vand og hæld det langs kanten mens pumpen kører. Tilsæt Aktivator i vandet samme dag — den booster det aktive ilt. Gives hver 3. dag. Sigt efter aktiv ilt 3–5 mg/l, og bad tidligst 15 min efter.",
-  "OxyChock (alt. dagligt)": "Alternativ til hver-3.-dag: en mindre dosis hver dag. Opløs i en spand vand og hæld langs kanten mens pumpen kører. Vælg enten daglig ELLER hver 3. dag — ikke begge. Mål med strips og hold 3–5 mg/l aktiv ilt.",
-  "OxyChock chok (grønt vand)": "Kraftig engangsdosis mod grønt/uklart vand. Justér pH til 7,0–7,4 FØRST. Opløs granulatet i en spand vand, hæld langs kanten, og lad pumpen køre 8–12 timer. Mål dagen efter og gentag eller flok om nødvendigt. Bad først når iltniveauet er normalt igen.",
-  "CombiTabs": "Klorfri tabletter til løbende desinfektion. Læg 1 tablet pr. 3.000 L i skimmer eller flyder. Hold pH 7,0–7,4 og mål aktiv ilt jævnligt.",
-  "KlarPool": "Forebygger uklart vand og alger. Tilsæt den ugentlige dosis direkte i vandet mens pumpen kører. Brug dunkens låg som målebæger.",
-  "FlokPool (uklart vand)": "Samler små partikler så filteret kan fange dem. Justér pH til 7,0–7,4 FØR brug. Sandfilter/FilterBalls: hæld i skimmeren mens pumpen kører, og returskyl efter 2–3 dage. Patronfilter: sluk pumpen, lad bundfælde 1–2 dage, og støvsug til kloak.",
-  "SeaKlear": "Naturligt klaringsmiddel der virker i alle filtre — også FilterBalls. Tilsæt den ugentlige dosis langs kanten mens pumpen kører.",
-  "pH-Minus": "Sænker pH. Den viste mængde sænker pH ca. 0,2. Opløs i en spand vand og hæld langs kanten mens pumpen kører. Vent et par timer og mål pH igen, før du eventuelt gentager. Mål: pH 7,0–7,4.",
-  "pH-Plus": "Hæver pH. Den viste mængde hæver pH ca. 0,2. Opløs i en spand vand og hæld langs kanten mens pumpen kører. Vent et par timer og mål igen. Mål: pH 7,0–7,4.",
-  "Metal Out": "Binder metaller (fx kobber og jern) der kan farve vandet eller give pletter. Hæv pH til 7,5–8,0 først, tilsæt langs kanten mens pumpen kører, og lad pumpen køre ca. 48 timer. Justér pH tilbage til 7,0–7,4 bagefter.",
-  "Sæsonstart": "Ved sæsonstart: tjek og justér pH til 7,0–7,4, og giv opstartsdosis OxyChock + Aktivator for at få aktivt ilt op på niveau. Kør pumpen ekstra de første dage og mål dagligt, indtil vandet er stabilt.",
-  "Klor løbende": "Hold frit klor på 1–3 mg/l. Doser efter produktets etiket (klor-doser er ikke lagt ind i appen endnu) og mål jævnligt med strips — især i varmt vejr.",
-  "Klor-chok (grønt vand)": "Kraftig klorbehandling ved grønt/uklart vand. Justér pH til 7,0–7,4 først, doser efter etiket, kør pumpen længe, og bad ikke før frit klor er faldet til 1–3 mg/l igen.",
+  "OxyChock + Aktivator": "Løbende pleje: 40 g OxyChock + ¼ dl Aktivator pr. 10.000 L hver 3. dag. Opløs hvert produkt for sig i en ren plastspand — tilsæt først vand — og fordel opløsningen langs bassinkanten mens pumpen kører. Bland dem aldrig sammen i samme spand. Justér pH til 7,0–7,4 først.",
+  "OxyChock (alt. dagligt)": "Mindre dosis dagligt i stedet for hver 3. dag. Opløs i en ren plastspand med vand først, og fordel langs kanten mens pumpen kører. Mål med teststrimler og hold aktiv ilt på 3–5 mg/l.",
+  "OxyChock chok (grønt vand)": "Chokbehandling ved grønt eller uklart vand. Børst først sider og bund, justér pH til 7,0–7,4, og chokbehandl derefter. Lad filtersystemet køre uden afbrydelse. Er vandet stadig uklart efter 24 timer, gentages processen forfra. Flokning bruges efter chokbehandlingen.",
+  "CombiTabs": "1 CombiTab dagligt pr. 3.000 L. Læg tabletterne i en flydende kemikaliedispenser eller direkte i skimmeren. Justér pH til 7,0–7,4 først — en sund vandbalance giver den bedste nyttevirkning. Øg doseringen ved høj temperatur og hyppig badning. Ætsende: indånd ikke pulver.",
+  "KlarPool": "Bland først KlarPool i en ren plastbeholder med vand, og tilsæt opløsningen langs bassinkanten. Start 1 dl pr. 10.000 L, derefter 0,5 dl ugentligt. Er der allerede belægninger, skal vandet chokbehandles med OxyChock FØR KlarPool bruges. Bør ikke blandes med andre kemikalier.",
+  "FlokPool (uklart vand)": "Justér først pH til 7,0–7,4. Sandfilter: tilsæt ved skimmeren mens pumpen kører, vent 2–3 dage, og returskyl derefter. Papir-/patronfilter: sluk pumpen, fordel midlet bredt i poolen, vent 1–2 dage til partiklerne er bundfældet, rengør bunden, og genstart og rens filteret.",
+  "SeaKlear": "Bland SeaKlear med vand i en ren plastikspand — tilsæt først vand. Hæld opløsningen i langs kanten mens cirkulationspumpen kører. 25 ml pr. 2.000 L ugentligt, oftere i højsæsonen. Virker med patronfilter, filterglas, FilterBalls og sandfilter.",
+  "pH-Minus": "Opløs pH-Minus i en ren plastbeholder med lidt vand — tilsæt først vand. Lad cirkulationspumpen køre, og fordel opløsningen langs poolkanten. 150 g sænker pH med 0,2 pr. 10.000 L. Må aldrig blandes med andre kemikalier.",
+  "pH-Plus": "Opløs pH-Plus i en ren plastbeholder med lidt vand — tilsæt først vand. Lad pumpen køre, og fordel opløsningen langs poolkanten. 100 g hæver pH med 0,2 pr. 10.000 L. Må aldrig blandes med andre kemikalier.",
+  "Metal Out": "Sørg for at pH ligger mellem 7,5 og 8,0 FØR Metal Out tilsættes. Fordel det jævnt i vandet mens poolsystemet kører, og hold systemet i gang i mindst 48 timer. Backwash derefter filteret grundigt eller vask dine FilterBalls, og justér pH tilbage. Syrekoncentrat — brug handsker og øjenbeskyttelse.",
+  "Sæsonstart": "Opstartsdosis: 1 dl Aktivator og 100 g OxyChock pr. 10.000 L. Opløs hvert produkt for sig i en ren plastspand med vand først, og fordel langs bassinkanten mens pumpen kører. Justér pH til 7,0–7,4 inden.",
+  "Klor løbende": "Hold frit klor på 1–3 mg/l og cyanursyre under 80 ppm. Doser efter produktets etiket — klor-doser er ikke lagt ind i appen endnu. Justér pH til 7,0–7,4 først.",
+  "Klor-chok (grønt vand)": "Chokbehandling med Klor Starter ved grønt vand. Børst sider og bund, justér pH til 7,0–7,4, og chokbehandl efter etiketten. Lad filtersystemet køre uden afbrydelse; er vandet stadig uklart efter 24 timer, gentages processen forfra.",
+};
+/* Dokumenterede ventetider EFTER en dosering (kun dem producenten faktisk angiver). */
+const DOSE_WAIT = {
+  "Metal Out": { h:48, text:"Lad poolsystemet køre i mindst 48 timer. Backwash derefter filteret eller vask dine FilterBalls, og justér pH." },
+  "FlokPool (uklart vand)": { h:72, text:"Sandfilter: returskyl efter 2–3 dage. Papir-/patronfilter: bundfældning 1–2 dage, rengør så bunden." },
+  "OxyChock chok (grønt vand)": { h:24, text:"Lad filtersystemet køre uden afbrydelse. Er vandet stadig uklart efter 24 timer, gentages processen forfra." },
+  "Klor-chok (grønt vand)": { h:24, text:"Lad filtersystemet køre uden afbrydelse. Er vandet stadig uklart efter 24 timer, gentages processen forfra." },
 };
 const SYSTEMS = { oxygen:"Aktiv ilt", chlorine:"Klor" };
 const FILTERS = { sand:"Sandfilter", glass:"Filterglas", cartridge:"Patronfilter", balls:"FilterBalls" };
@@ -146,7 +167,16 @@ function buildDoseRows(cfg, d){
   rows.push(["pH-Plus","Hæver pH 0,2",`${d.phPlus} g`]);
   rows.push(["Metal Out","Metaller/kobber",`${d.metalMin}–${d.metalMax} ml`]);
   if(cfg.system!=="chlorine") rows.push(["Sæsonstart","Opstart",`${d.oxyStart} g + ${d.aktStart} ml`]);
-  return rows;
+  // Sortér efter Swim & Funs trin 1→4, så rækkefølgen er den man skal følge.
+  return rows.sort((a,b)=>(DOSE_STEP[a[0]]||9)-(DOSE_STEP[b[0]]||9));
+}
+/* Er der en dokumenteret ventetid i gang efter en dosering? */
+function activeWait(log, product){
+  const w=DOSE_WAIT[product]; if(!w)return null;
+  const last=(log||[]).find(e=>e.extra&&e.extra.name===product);
+  if(!last)return null;
+  const passed=(Date.now()-last.ts)/3600000;
+  return passed<w.h?{...w,passed}:null;
 }
 
 /* ---------- helpers ---------- */
@@ -538,10 +568,33 @@ REGLER:
           <TrendView history={state.history} system={cfg.system}/>
 
           <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L${d.uv?" · UV":""}`}/>
-          <section style={{...card,padding:0,overflow:"hidden"}}>
-            {buildDoseRows(cfg,d).map((r,i,arr)=><DoseRow key={r[0]} a={r[0]} b={r[1]} c={r[2]} onLog={logExtra} info={DOSE_INFO[r[0]]} last={i===arr.length-1}/>)}
+
+          <section style={{...card,marginTop:0,background:T.warnBg,border:"none",display:"flex",gap:10,padding:"13px 15px"}}>
+            <AlertTriangle size={18} color={T.warn} style={{flexShrink:0,marginTop:1}}/>
+            <div style={{fontSize:12.5,color:T.warn,lineHeight:1.5}}>
+              <b>Bland aldrig to produkter.</b> Tag ét ad gangen: opløs det i sin egen rene plastspand — <b>vand først</b> — og hæld langs bassinkanten mens pumpen kører. Følg trinnene herunder i rækkefølge.
+            </div>
           </section>
-          <p style={{fontSize:11.5,color:T.sub,margin:"10px 4px 0",lineHeight:1.5}}>{d.uv?"UV-lys reducerer de løbende desinfektionsdoser (vejledende) — mål altid med strips for at bekræfte. ":""}Tryk på et <b>produktnavn</b> for fremgangsmåden. Tryk <b>+ Givet</b> for at registrere en ekstra dosis — den havner i loggen og tages med i næste plan. Opløs altid granulat i en spand vand først og hæld langs kanten. Justér pH før flokning. Brug dunkens låg som målebæger.</p>
+
+          {(()=>{ const rows=buildDoseRows(cfg,d); let prev=null;
+            return STEPS.filter(st=>rows.some(r=>DOSE_STEP[r[0]]===st.n)).map(st=>{
+              const mine=rows.filter(r=>DOSE_STEP[r[0]]===st.n);
+              return <div key={st.n} style={{marginTop:12}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:8,margin:"0 4px 6px"}}>
+                  <span style={{...eyebrow,color:T.teal}}>{st.title}</span>
+                </div>
+                <p style={{fontSize:11.5,color:T.sub,margin:"0 4px 7px",lineHeight:1.5}}>{st.note}</p>
+                <section style={{...card,marginTop:0,padding:0,overflow:"hidden"}}>
+                  {mine.map((r,i)=>(
+                    <DoseRow key={r[0]} a={r[0]} b={r[1]} c={r[2]} onLog={logExtra}
+                      info={DOSE_INFO[r[0]]} wait={activeWait(state.log,r[0])} last={i===mine.length-1}/>
+                  ))}
+                </section>
+              </div>;
+            });
+          })()}
+
+          <p style={{fontSize:11.5,color:T.sub,margin:"12px 4px 0",lineHeight:1.5}}>{d.uv?"UV-lys reducerer de løbende desinfektionsdoser (vejledende) — mål altid med teststrimler for at bekræfte. ":""}Tryk på et <b>produktnavn</b> for producentens fremgangsmåde. Tryk <b>+ Givet</b> for at registrere en dosis — den havner i loggen og tages med i næste plan. Brug dunkens låg som målebæger.</p>
         </>}
 
         {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
@@ -627,8 +680,10 @@ function Reading({label,hint,placeholder,last,onSave}){ const [v,setV]=useState(
     {last&&<div style={{fontSize:11,color:T.teal,marginTop:7}}>Sidst: <b>{last.value}</b> · {last.initials} · {timeAgo(last.ts)}</div>}
   </div>;
 }
-function DoseRow({a,b,c,last,onLog,info}){
+function DoseRow({a,b,c,last,onLog,info,wait}){
   const [open,setOpen]=useState(false);
+  const hLeft=wait?Math.max(1,Math.round(wait.h-wait.passed)):0;
+  const left=hLeft>=24?`${Math.round(hLeft/24*10)/10}`.replace(".",",")+" dage":`${hLeft} t`;
   return <div style={{borderBottom:last?"none":`1px solid ${T.line}`}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
       <button className="pv-btn" onClick={()=>info&&setOpen(o=>!o)} style={{flex:1,minWidth:0,background:"none",border:"none",textAlign:"left",cursor:info?"pointer":"default",fontFamily:FONT,padding:0}}>
@@ -638,6 +693,9 @@ function DoseRow({a,b,c,last,onLog,info}){
       <div style={{fontSize:14,fontWeight:800,color:T.teal,whiteSpace:"nowrap"}}>{c}</div>
       {onLog&&<button className="pv-btn" onClick={()=>onLog(a,c)} title="Registrér som givet i dag" style={{...miniPill,background:T.aquaSoft,color:T.teal,flexShrink:0}}>+ Givet</button>}
     </div>
+    {wait&&<div style={{margin:"0 16px 11px",padding:"9px 11px",background:T.infoBg,borderRadius:10,fontSize:12,color:T.info,lineHeight:1.5}}>
+      ⏳ <b>Afventer ~{left}</b> — {wait.text}
+    </div>}
     {open&&info&&<div style={{padding:"0 16px 13px",fontSize:12.5,color:T.sub,lineHeight:1.55}}>{info}</div>}
   </div>;
 }

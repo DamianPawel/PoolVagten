@@ -2,6 +2,17 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Doseringsrækkefølge og håndtering (kildebekræftet)
+Ønske: gøre det intuitivt hvad der må gives sammen, og hvad der kræver ventetid. Aftalt i pingpong: **100 % producentens vejledninger, ingen antagelser**.
+
+- **Kilder læst** (Swim & Funs produktsider + artikler, links i VERSIONS): pH-Minus, pH-Plus, Metal Out, CombiTabs, Aktivator, KlarPool, FlokPool, SeaKlear, teststrimler + artikler om grønt/mælkehvidt/tåget vand og pH.
+- **Nøglefund:** Swim & Fun har selv opdelt produkterne i **trin 1–4** (pH-balance → desinfektion → klar pool → flokning). Det *er* rækkefølgen, og deres problemløsnings-artikler følger samme forløb. "Dine doser" er nu sorteret og grupperet efter trin, med en kort note pr. trin.
+- **Fast sikkerhedsadvarsel** øverst i doser, citeret fra etiketterne: bland aldrig to produkter — ét ad gangen, hver i sin rene plastspand, vand først, pumpen kører.
+- **Aktive ventetider** vises på rækken efter en registreret dosis, men **kun de ventetider producenten faktisk angiver**: Metal Out 48 t, FlokPool 2–3 dage (sand) / 1–2 dage (papir/patron), chok 24 t før gentagelse. Vises i dage når der er over et døgn tilbage.
+- **Rettet tidligere gætværk:** de oprindelige fremgangsmåde-tekster indeholdt tal jeg ikke havde kilde på ("bad tidligst 15 min efter", "kør pumpen 8–12 timer", "vent et par timer og mål igen"). Alle 13 produkttekster er skrevet om efter producentens ordlyd.
+- **Afkræftet antagelse:** der findes ingen 5-minutters regel mellem OxyChock og Aktivator — de angives i samme dosering. Den reelle regel er, at de ikke må blandes i samme spand.
+- Verificeret visuelt i browser: trin 1–4 vises i orden, og ventetider beregnes korrekt (Metal Out 1,9 dage / FlokPool 2,6 dage i test).
+
 ## 2026-06-23 — PWA (hjemmeskærm) og trendgraf
 **PWA:**
 - `manifest.webmanifest` + ikoner (192/512 maskable + apple-touch 180) tegnet ud fra appens bølgelogo. PNG'erne er genereret én gang med Pillow lokalt og committet — **ingen runtime-afhængighed**.

@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.5.0** (2026-06-23) — doseringsrækkefølge efter Swim & Funs trin 1–4, sikkerhedsregel om ikke at blande, og kildebekræftede ventetider.
 **1.4.0** (2026-06-23) — PWA (hjemmeskærm) og trendgraf over målinger.
 **1.3.0** (2026-06-23) — login (Google + e-mail/kode), roller pr. adresse (admin/editor/user), flere adresser pr. husstand, og lukkede API-endpoints bag login.
 **1.2.0** (2026-06-23) — opfølgning på behandlinger (Ja/Nej efter 2 dage), lokale doseringsforslag ud fra målinger, "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt, og delt spørgechat (/api/chat) der kender poolens data.
@@ -60,6 +61,27 @@ Tal pr. 10.000 liter (undtagen hvor andet er nævnt). Skaleres lineært med pool
 | SeaKlear | Ugentligt, alle filtre inkl. FilterBalls | 25 ml pr. 2.000 L |
 
 Mål-niveauer: pH **7,0–7,4** (ideelt 7,2); aktiv ilt **3–5 mg/l**; frit klor **1–3 mg/l**; cyanursyre **< 80 ppm**; filtertid **≥ 8 t/dag**.
+
+## Rækkefølge og håndtering (Swim & Funs egen trin-inddeling)
+Produkterne er hos Swim & Fun opdelt i fire trin, og **det er rækkefølgen**. Appen viser doserne i samme orden.
+
+| Trin | Produkter |
+|---|---|
+| 1 · pH-balance | pH-Minus, pH-Plus, Metal Out, teststrimler |
+| 2 · Desinfektion | OxyChock, CombiTabs (klor: Klor Starter) |
+| 3 · Klar pool | Aktivator, KlarPool |
+| 4 · Flokning | FlokPool, SeaKlear |
+
+**Sikkerhedsregel (citeret fra pH-Minus/pH-Plus):** *"Må aldrig blandes med andre kemikalier!"* KlarPool: *"bør ikke blandes med andre kemikalier"*. Hvert produkt opløses i **sin egen** rene plastspand — *"Tilsæt først vand!"* — og fordeles langs bassinkanten mens pumpen kører.
+
+**Dokumenterede ventetider** (kun disse er angivet af producenten):
+- **Metal Out:** pH 7,5–8,0 først; hold systemet i gang **mindst 48 timer**; backwash/vask filter derefter og justér pH.
+- **FlokPool, sandfilter:** tilsæt ved skimmeren mens pumpen kører → **2–3 dage** → returskyl.
+- **FlokPool, papir-/patronfilter:** pumpen slukket → **1–2 dage** bundfældning → rengør bunden → genstart og rens filter.
+- **Chokbehandling (grønt/uklart vand):** filtersystemet kører uafbrudt; stadig uklart efter **24 timer** → gentag forfra.
+- **KlarPool ved eksisterende belægninger:** chokbehandl med OxyChock/Hurtigklor **inden** KlarPool bruges.
+
+> Der er **ingen** minut-baserede ventetider mellem produkter i Swim & Funs vejledninger — heller ikke mellem OxyChock og Aktivator, som angives i samme dosering. Appen opfinder ingen tal.
 
 App'en holder systemerne adskilt: i aktiv ilt-tilstand vises kun ilt-produkter, i klor-tilstand kun klor — ingen krydsanbefalinger. (Klor og aktiv ilt er teknisk kompatible iflg. Swim & Fun, men appen blander dem ikke.)
 Flokning, sandfilter: i skimmeren mens pumpen kører → returskyl efter 2–3 dage. Patronfilter: pumpe slukket, bundfæld 1–2 dage, støvsug. FilterBalls: kun SeaKlear.
