@@ -13,15 +13,15 @@
 
 ## Måske / nice-to-have
 - [ ] Push-/mail-påmindelse om morgenen (kræver baggrundsjob — vej op mod "hold det simpelt").
-- [ ] PWA-manifest så appen kan lægges på hjemmeskærmen som ikon.
 - [ ] Flere produkter (pH-Minus/-Plus mængdeforslag, Flocking Sticks-tilstand).
 - [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
 - [ ] Ekstra dosis: mulighed for at indtaste egen mængde (i stedet for den faste).
 - [ ] Vis dagens ekstra doser som små chips på "I dag"-fanen.
-- [ ] Lille trend-graf over pH/aktiv ilt over tid.
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] PWA: appen kan lægges på hjemmeskærmen (manifest, ikoner, cache-fri service worker).
+- [x] Trendgraf over pH/ilt/klor/vandtemp med målområde; historik genskabt fra loggen.
 - [x] Login i fire etaper: backup + additivt skema, sessions/Google/e-mail-kode, rolletjek på alle endpoints, adresser + brugeradministration.
 - [x] Opfølgning på behandlinger (Ja/Nej efter 2 dage, med i AI-planen).
 - [x] Lokale doseringsforslag ud fra målinger (pH/ilt/klor vs. mål + satser).

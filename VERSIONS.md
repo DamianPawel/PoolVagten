@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.4.0** (2026-06-23) — PWA (hjemmeskærm) og trendgraf over målinger.
 **1.3.0** (2026-06-23) — login (Google + e-mail/kode), roller pr. adresse (admin/editor/user), flere adresser pr. husstand, og lukkede API-endpoints bag login.
 **1.2.0** (2026-06-23) — opfølgning på behandlinger (Ja/Nej efter 2 dage), lokale doseringsforslag ud fra målinger, "Skal gøres" grupperet i Dagligt/Ugentligt/Månedligt/Årligt, og delt spørgechat (/api/chat) der kender poolens data.
 **1.1.0** (2026-06-23) — dual-system (aktiv ilt/klor), desinfektionsform (OxyChock/CombiTabs), UV-filterlys, filtertype, udvidet + kildebekræftet produktkatalog.
@@ -38,6 +39,7 @@
 - AI-model: `claude-sonnet-4-6` (override via `CLAUDE_MODEL`)
 - Vejr: Open-Meteo forecast API (ingen nøgle)
 - Geokodning: Nominatim / OpenStreetMap (ingen nøgle) — adresse → koordinater
+- PWA: manifest + ikoner; service worker uden caching (kun installerbarhed)
 
 ## Doseringsstandarder (Swim & Fun) — kildebekræftet juni 2026
 Tal pr. 10.000 liter (undtagen hvor andet er nævnt). Skaleres lineært med poolstørrelse.

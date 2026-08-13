@@ -2,6 +2,19 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — PWA (hjemmeskærm) og trendgraf
+**PWA:**
+- `manifest.webmanifest` + ikoner (192/512 maskable + apple-touch 180) tegnet ud fra appens bølgelogo. PNG'erne er genereret én gang med Pillow lokalt og committet — **ingen runtime-afhængighed**.
+- `sw.js` serveres fra **roden** (`/sw.js`), så dens scope dækker hele appen; `/static/sw.js` ville kun dække `/static`.
+- Service workeren cacher **bevidst ingenting** og rydder gamle caches. Formålet er alene installerbarhed. Begrundelse: en cachet `index.html` gav os tidligere en blank side, og cachede API-svar ville rode med login og delt status.
+- Manifest, sw.js og ikoner ligger uden for login — nødvendigt for at appen kan installeres.
+
+**Trendgraf:**
+- Målinger gemmes nu i `state.history` (`{k, v, ts}`, max 400) — adskilt fra loggen, så de ikke forsvinder når den kappes ved 60 poster.
+- `historyFromLog()` genskaber historik fra gamle log-poster ("Målte pH: 7,2") ved første load. Testet mod produktions-backuppen: **22 målinger genskabt** (9 pH, 9 ilt, 4 temp), så grafen starter med data.
+- Foldbar SVG-graf under Hurtige målinger (intet bibliotek, intet byggetrin): målområde som bånd, skift mellem pH, ilt/klor og vandtemp, y-akse-tal også når der ikke er målområde, og status "Inden for mål".
+- Verificeret visuelt i browser med mockede data for alle tre måletyper.
+
 ## 2026-06-23 — Login er tændt (REQUIRE_AUTH=1)
 - `REQUIRE_AUTH=1` sat i Railway. Verificeret: `state`, `pools`, `weather`, `geocode`, `plan` og `chat` svarer **401** uden login; login-skærm, `/api/auth/me` og `/api/health` er fortsat åbne (nødvendigt for selve login-flowet).
 - Anthropic-nøglen er dermed ikke længere tilgængelig for enhver med linket.
