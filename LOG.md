@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Nulstil kræver nu at man skriver SLET
+- Nulstil er tre trin: tryk → "Tryk igen for at nulstille log & plan" → popup hvor man skal skrive **SLET**. Knappen i popuppen er deaktiveret indtil teksten er korrekt (accepterer små bogstaver og mellemrum via trim+uppercase). Annullér, Escape og klik udenfor lukker uden at slette.
+- Rollegating var allerede på plads i begge lag: UI viser kun knappen for admin/editor (`canEdit`), og serveren afviser en `user` der forsøger at rydde. Tilføjede `plan` til serverens beskyttede felter, så hele nulstillingen er dækket.
+- "Hurtige målinger" (og trendgrafen) flyttet op før "Skal gøres" — mål først, så ved man hvad der skal gøres.
+- Rettet "~1 dage" → "~1 dag" i ventetids-visningen.
+- Verificeret i browser: tom/forkert tekst holder knappen deaktiveret, "SLET" aktiverer den, og Annullér lukker uden at slette.
+
 ## 2026-06-23 — Doseringsrækkefølge og håndtering (kildebekræftet)
 Ønske: gøre det intuitivt hvad der må gives sammen, og hvad der kræver ventetid. Aftalt i pingpong: **100 % producentens vejledninger, ingen antagelser**.
 

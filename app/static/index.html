@@ -683,7 +683,8 @@ function Reading({label,hint,placeholder,last,onSave}){ const [v,setV]=useState(
 function DoseRow({a,b,c,last,onLog,info,wait}){
   const [open,setOpen]=useState(false);
   const hLeft=wait?Math.max(1,Math.round(wait.h-wait.passed)):0;
-  const left=hLeft>=24?`${Math.round(hLeft/24*10)/10}`.replace(".",",")+" dage":`${hLeft} t`;
+  const dLeft=hLeft>=24?Math.round(hLeft/24*10)/10:0;
+  const left=hLeft>=24?`${dLeft}`.replace(".",",")+(dLeft===1?" dag":" dage"):`${hLeft} t`;
   return <div style={{borderBottom:last?"none":`1px solid ${T.line}`}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
       <button className="pv-btn" onClick={()=>info&&setOpen(o=>!o)} style={{flex:1,minWidth:0,background:"none",border:"none",textAlign:"left",cursor:info?"pointer":"default",fontFamily:FONT,padding:0}}>
@@ -984,6 +985,7 @@ function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=u
   const myRole=authUser&&(authUser.memberships||[]).length?authUser.memberships[0].role:null;
   const canEdit=!myRole||myRole==="admin"||myRole==="editor";   // uden login: som før
   const [addr,setAddr]=useState(""); const [geoBusy,setGeoBusy]=useState(false); const [geoErr,setGeoErr]=useState(null);
+  const [wipeOpen,setWipeOpen]=useState(false); const [wipeText,setWipeText]=useState("");
   const set=(k,v)=>setF(s=>({...s,[k]:v})); const setRate=(k,v)=>setF(s=>({...s,rates:{...s.rates,[k]:parseFloat(v)||0}})); const save=()=>{ onSave(f); showToast("Gemt"); };
   const findAddr=async()=>{ const q=addr.trim(); if(!q)return; setGeoBusy(true); setGeoErr(null);
     try{ const r=await fetch(`/api/geocode?q=${encodeURIComponent(q)}`); if(!r.ok)throw 0; const d=await r.json();
@@ -1049,7 +1051,7 @@ function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=u
 
     {canEdit ? <>
       <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
-      <button className="pv-btn" onClick={()=>{ if(confirmReset){ onReset(); setConfirmReset(false); showToast("Nulstillet"); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
+      <button className="pv-btn" onClick={()=>{ if(confirmReset){ setConfirmReset(false); setWipeText(""); setWipeOpen(true); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
     </> : <p style={{fontSize:12.5,color:T.sub,margin:"14px 4px 0",lineHeight:1.55,background:T.infoBg,padding:"11px 13px",borderRadius:12}}>Du har rollen <b>bruger</b> og kan registrere det, du gør ved poolen — men ikke ændre indstillinger. Spørg en admin i husstanden, hvis noget skal rettes.</p>}
 
     <HouseholdView showToast={showToast} authUser={authUser}/>
@@ -1064,6 +1066,26 @@ function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=u
         <button className="pv-btn" onClick={async()=>{ await fetch("/api/auth/logout",{method:"POST"}); window.location.reload(); }} style={{...miniPill,background:"none",color:T.danger,border:`1.5px solid ${T.dangerBg}`,flexShrink:0}}>Log ud</button>
       </div>
     </section>}
+
+    {wipeOpen&&<div onClick={e=>{ if(e.target===e.currentTarget)setWipeOpen(false); }} style={{position:"fixed",inset:0,background:"rgba(10,46,51,.55)",display:"grid",placeItems:"center",padding:18,zIndex:60}}>
+      <div style={{background:T.surface,borderRadius:18,padding:"20px 18px",width:"100%",maxWidth:360,boxShadow:"0 18px 50px rgba(10,46,51,.3)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+          <AlertTriangle size={20} color={T.danger}/>
+          <div style={{fontSize:16,fontWeight:800,color:T.ink}}>Nulstil log & plan</div>
+        </div>
+        <p style={{fontSize:13,color:T.sub,lineHeight:1.55,margin:"0 0 6px"}}>Dette sletter <b>hele husstandens log</b>, alle flueben, målinger og planen for denne adresse. Det kan <b>ikke</b> fortrydes.</p>
+        <p style={{fontSize:13,color:T.sub,lineHeight:1.55,margin:"0 0 12px"}}>Skriv <b style={{color:T.danger}}>SLET</b> herunder for at bekræfte.</p>
+        <input className="pv-in" autoFocus value={wipeText} onChange={e=>setWipeText(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter"&&wipeText.trim().toUpperCase()==="SLET"){ onReset(); setWipeOpen(false); showToast("Nulstillet"); } if(e.key==="Escape")setWipeOpen(false); }}
+          placeholder="SLET" autoCapitalize="characters" autoCorrect="off" style={{...inStyle,textAlign:"center",fontWeight:800,letterSpacing:2}}/>
+        <div style={{display:"flex",gap:9,marginTop:14}}>
+          <button className="pv-btn" onClick={()=>setWipeOpen(false)} style={{flex:1,background:"none",color:T.ink,border:`1.5px solid ${T.line}`,borderRadius:11,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:FONT}}>Annullér</button>
+          <button className="pv-btn" disabled={wipeText.trim().toUpperCase()!=="SLET"}
+            onClick={()=>{ onReset(); setWipeOpen(false); showToast("Nulstillet"); }}
+            style={{flex:1,background:wipeText.trim().toUpperCase()==="SLET"?T.danger:T.line,color:"#fff",border:"none",borderRadius:11,padding:"11px",fontWeight:800,fontSize:14,cursor:wipeText.trim().toUpperCase()==="SLET"?"pointer":"default",fontFamily:FONT}}>Nulstil</button>
+        </div>
+      </div>
+    </div>}
   </>;
 }
 const Field=({label,children})=><div style={{marginBottom:12,flex:1}}><div style={{fontSize:12,fontWeight:600,color:T.sub,marginBottom:5}}>{label}</div>{children}</div>;

@@ -510,7 +510,8 @@ async def write_state(payload: dict, request: Request, pool: int = 1) -> dict:
         ):
             raise HTTPException(403, "Kun admin og editor kan ændre indstillinger.")
         if any(
-            _emptied(old.get(k), payload.get(k)) for k in ("log", "checks", "readings")
+            _emptied(old.get(k), payload.get(k))
+            for k in ("log", "checks", "readings", "plan")
         ):
             raise HTTPException(403, "Kun admin og editor kan nulstille.")
     return await put_state(payload, pool)
