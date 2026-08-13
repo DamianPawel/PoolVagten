@@ -542,18 +542,6 @@ REGLER:
             </section>
           ))}
 
-          <SectionTitle icon={Check} title="Skal gøres"/>
-          <section style={{...card,padding:8}}>
-            {BUCKET_ORDER.map(bk=>{ const items=tasks.filter(t=>FREQ_BUCKET[t.freq]===bk); if(!items.length)return null;
-              return <div key={bk} style={{marginBottom:6}}>
-                <div style={{...eyebrow,color:T.sub,padding:"8px 8px 4px"}}>{bk}</div>
-                {items.map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
-                  return <TaskRow key={task.id} task={task} done={done} due={due} dose={task.dose||null} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
-                })}
-              </div>;
-            })}
-          </section>
-
           <SectionTitle icon={Beaker} title="Hurtige målinger"/>
           <section style={{...card,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Reading label="pH" hint="7,0 – 7,4" placeholder="7,2" last={state.readings?.ph} onSave={v=>saveReading("ph",v)}/>
@@ -566,6 +554,18 @@ REGLER:
           </section>
 
           <TrendView history={state.history} system={cfg.system}/>
+
+          <SectionTitle icon={Check} title="Skal gøres"/>
+          <section style={{...card,padding:8}}>
+            {BUCKET_ORDER.map(bk=>{ const items=tasks.filter(t=>FREQ_BUCKET[t.freq]===bk); if(!items.length)return null;
+              return <div key={bk} style={{marginBottom:6}}>
+                <div style={{...eyebrow,color:T.sub,padding:"8px 8px 4px"}}>{bk}</div>
+                {items.map(task=>{ const done=!!state.checks[`${today()}::${task.id}`]; const due=isDue(state.checks,task); const last=lastDone(state.checks,task.id);
+                  return <TaskRow key={task.id} task={task} done={done} due={due} dose={task.dose||null} last={last} stamp={done?state.checks[`${today()}::${task.id}`]:null} onToggle={()=>toggleTask(task.id,task.label)}/>;
+                })}
+              </div>;
+            })}
+          </section>
 
           <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L${d.uv?" · UV":""}`}/>
 
