@@ -6,6 +6,12 @@
 <meta name="theme-color" content="#0B6E78" />
 <title>Poolvagten</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E%F0%9F%8F%8A%3C/text%3E%3C/svg%3E" />
+<!-- Hjemmeskærm (PWA) -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Poolvagten" />
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #EAF6F5; }
@@ -186,6 +192,19 @@ function isDue(checks,task){ const l=lastDone(checks,task.id); if(!l)return true
 /* Tilføj log-post, men slå identiske (samme person+label) sammen inden for 90 sek. */
 function addLogEntry(log,entry){ const dup=(log||[]).some(e=>e.label===entry.label&&e.initials===entry.initials&&Math.abs(entry.ts-e.ts)<90000); return dup?(log||[]):[entry,...(log||[])].slice(0,60); }
 function num(v){ const n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?null:n; }
+/* Genskab måle-historik fra gamle log-poster ("Målte pH: 7,2"), så grafen
+   har noget at vise, første gang funktionen tages i brug. */
+function historyFromLog(log){
+  const byLabel={}; Object.keys(READING_LABEL).forEach(k=>byLabel[READING_LABEL[k]]=k);
+  const out=[];
+  for(const e of (log||[])){
+    const m=/^Målte (.+?):\s*([-\d.,]+)/.exec(e.label||"");
+    if(!m)continue;
+    const k=byLabel[m[1].trim()]; const v=num(m[2]);
+    if(k&&v!=null) out.push({k,v,ts:e.ts});
+  }
+  return out.sort((a,b)=>a.ts-b.ts).slice(-400);
+}
 /* Lokale doseringsforslag ud fra seneste måling og JERES satser (ingen AI). */
 function measureSuggestions(cfg, readings, d){
   const out=[]; const r=readings||{};
@@ -260,6 +279,8 @@ function Poolvagten(){
     if(!s.profiles)s.profiles=[];
     if(!s.followups)s.followups=[];
     if(!s.chat)s.chat=[];
+    // Første gang: genskab måle-historik fra loggen, så grafen ikke starter tom.
+    if(!s.history){ s.history=historyFromLog(s.log); if(s.history.length) await apiPutState(s); }
     setState(s);
   })(); },[auth,needLogin]);
 
@@ -290,9 +311,13 @@ function Poolvagten(){
     });
   };
   const saveReading=(kind,value)=>{ if(!value)return; if(!me){ showToast("Vælg en profil først"); return; }
+    const n=num(value); if(n==null){ showToast("Skriv et tal"); return; }
     mutate(s=>{ const readings={...s.readings,[kind]:{value,ts:Date.now(),initials:me}};
       const entry={id:Math.random().toString(36).slice(2),ts:Date.now(),label:`Målte ${READING_LABEL[kind]||kind}: ${value}${READING_UNIT[kind]||""}`,initials:me};
-      return {...s,readings,log:addLogEntry(s.log,entry)};
+      // Historik til trend-grafen. Holdes adskilt fra loggen, så den ikke
+      // forsvinder når loggen kappes ved 60 poster.
+      const hist=[...(s.history||[]),{k:kind,v:n,ts:Date.now()}].slice(-400);
+      return {...s,readings,history:hist,log:addLogEntry(s.log,entry)};
     });
     showToast("Måling gemt");
   };
@@ -509,6 +534,8 @@ REGLER:
               <Reading label="Badevandstemperatur" hint="°C — fx 24" placeholder="24" last={state.readings?.temp} onSave={v=>saveReading("temp",v)}/>
             </div>
           </section>
+
+          <TrendView history={state.history} system={cfg.system}/>
 
           <SectionTitle icon={Gauge} title={`Dine doser · ${cfg.poolSize.toLocaleString("da-DK")} L${d.uv?" · UV":""}`}/>
           <section style={{...card,padding:0,overflow:"hidden"}}>
@@ -748,6 +775,71 @@ function ChatView({chat,onSend,busy,onClear}){
     <p style={{fontSize:11,color:T.sub,margin:"8px 4px 0",lineHeight:1.5}}>Svar er vejledende og via Anthropic. Samtalen deles med hele husstanden.</p>
   </>;
 }
+/* Målområder til trend-grafen (samme tal som resten af appen) */
+const TREND_TARGET={ ph:[7.0,7.4], oxy:[3,5], klor:[1,3], temp:null };
+function TrendView({history,system}){
+  const kinds=[["ph","pH"],system==="chlorine"?["klor","Frit klor"]:["oxy","Aktiv ilt"],["temp","Vandtemp"]];
+  const [kind,setKind]=useState("ph");
+  const [open,setOpen]=useState(false);
+  const all=(history||[]).filter(h=>h.k===kind).sort((a,b)=>a.ts-b.ts);
+  const cut=Date.now()-45*86400000;
+  const pts=all.filter(h=>h.ts>=cut).length>=2?all.filter(h=>h.ts>=cut):all.slice(-12);
+  const W=320,H=132,L=32,R=10,Tp=12,B=22;
+  const target=TREND_TARGET[kind];
+  let body=null;
+  if(pts.length===0){
+    body=<div style={{fontSize:12.5,color:T.sub,textAlign:"center",padding:"22px 8px",lineHeight:1.55}}>Ingen målinger endnu. Gem et par målinger ovenfor, så tegner jeg udviklingen her.</div>;
+  } else {
+    const vs=pts.map(p=>p.v);
+    let lo=Math.min(...vs), hi=Math.max(...vs);
+    if(target){ lo=Math.min(lo,target[0]); hi=Math.max(hi,target[1]); }
+    const pad=(hi-lo)*0.18||(Math.abs(hi)*0.1||1); lo-=pad; hi+=pad;
+    const t0=pts[0].ts, t1=pts[pts.length-1].ts;
+    const X=ts=>L+(t1===t0?(W-L-R)/2:(ts-t0)/(t1-t0)*(W-L-R));
+    const Y=v=>Tp+(hi-v)/(hi-lo)*(H-Tp-B);
+    const line=pts.map((p,i)=>`${i?"L":"M"}${X(p.ts).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ");
+    const fmt=v=>(Math.round(v*10)/10).toString().replace(".",",");
+    const dl=ts=>{ const d=new Date(ts); return `${d.getDate()}/${d.getMonth()+1}`; };
+    const last=pts[pts.length-1];
+    const inTarget=!target||(last.v>=target[0]&&last.v<=target[1]);
+    body=<>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+        {target&&<rect x={L} y={Y(target[1])} width={W-L-R} height={Math.max(1,Y(target[0])-Y(target[1]))} fill={T.aquaSoft}/>}
+        {target&&[target[0],target[1]].map((v,i)=>(
+          <g key={i}><line x1={L} y1={Y(v)} x2={W-R} y2={Y(v)} stroke={T.aqua} strokeWidth="1" strokeDasharray="3 3"/>
+          <text x={L-5} y={Y(v)+3.5} textAnchor="end" fontSize="9" fill={T.teal}>{fmt(v)}</text></g>
+        ))}
+        <line x1={L} y1={H-B} x2={W-R} y2={H-B} stroke={T.line} strokeWidth="1"/>
+        {pts.length>1&&<path d={line} fill="none" stroke={T.teal} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>}
+        {pts.map((p,i)=>(
+          <circle key={i} cx={X(p.ts)} cy={Y(p.v)} r={i===pts.length-1?4:2.6}
+            fill={i===pts.length-1?T.teal:"#fff"} stroke={T.teal} strokeWidth="1.6"/>
+        ))}
+        <text x={L} y={H-7} fontSize="9" fill={T.sub}>{dl(t0)}</text>
+        {t1!==t0&&<text x={W-R} y={H-7} fontSize="9" fill={T.sub} textAnchor="end">{dl(t1)}</text>}
+      </svg>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:12.5,color:T.sub}}>Seneste: <b style={{color:inTarget?T.ok:T.warn}}>{fmt(last.v)}{READING_UNIT[kind]||""}</b></span>
+        <span style={{fontSize:11.5,color:T.sub}}>· {pts.length} {pts.length===1?"måling":"målinger"}</span>
+        {target&&<span style={{...badge,background:inTarget?T.aquaSoft:T.warnBg,color:inTarget?T.tealDeep:T.warn}}>{inTarget?"Inden for mål":"Uden for mål"}</span>}
+      </div>
+    </>;
+  }
+  return <>
+    <button className="pv-btn" onClick={()=>setOpen(o=>!o)} style={{...card,width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",fontFamily:FONT,fontSize:13.5,fontWeight:600,color:T.ink,marginTop:12,padding:"13px 15px"}}>
+      <span style={{display:"flex",alignItems:"center",gap:8}}><Gauge size={15} color={T.teal}/>Udvikling over tid</span>
+      <ChevronDown size={18} color={T.sub} style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}/>
+    </button>
+    {open&&<section style={{...card,marginTop:8,padding:"12px 14px 14px"}}>
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+        {kinds.map(([k,l])=>(
+          <button key={k} className="pv-btn" onClick={()=>setKind(k)} style={{...miniPill,background:kind===k?T.teal:T.aquaSoft,color:kind===k?"#fff":T.tealDeep}}>{l}</button>
+        ))}
+      </div>
+      {body}
+    </section>}
+  </>;
+}
 const ROLE_LABEL={admin:"Admin",editor:"Editor",user:"Bruger"};
 function HouseholdView({showToast,authUser}){
   const [pools,setPools]=useState(null); const [users,setUsers]=useState(null);
@@ -938,6 +1030,9 @@ const navBar={position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,
 const navItem={background:"none",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",padding:"4px 9px",fontFamily:FONT};
 
 ReactDOM.createRoot(document.getElementById("root")).render(<Poolvagten/>);
+// Registrér service worker, så appen kan lægges på hjemmeskærmen. Den cacher
+// intet — se sw.js. Fejler den, kører appen præcis som før.
+if("serviceWorker" in navigator) window.addEventListener("load",()=>{ navigator.serviceWorker.register("/sw.js").catch(()=>{}); });
 </script>
 </body>
 </html>

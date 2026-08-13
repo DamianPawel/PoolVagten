@@ -804,6 +804,25 @@ async def chat(req: ChatRequest, request: Request) -> dict:
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 
+@app.get("/sw.js")
+async def service_worker() -> FileResponse:
+    """Serveres fra roden, så dens scope dækker hele appen (ikke kun /static)."""
+    return FileResponse(
+        str(STATIC / "sw.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
+
+@app.get("/manifest.webmanifest")
+async def manifest() -> FileResponse:
+    return FileResponse(
+        str(STATIC / "manifest.webmanifest"),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/")
 async def index() -> FileResponse:
     # no-cache: browseren skal altid revalidere index.html mod serverens etag,

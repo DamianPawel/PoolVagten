@@ -1,0 +1,17 @@
+{
+  "name": "Poolvagten",
+  "short_name": "Poolvagten",
+  "description": "Husstandens pool — tjekliste, doser, målinger og plan.",
+  "lang": "da",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EAF6F5",
+  "theme_color": "#0B6E78",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
