@@ -2,24 +2,23 @@
 
 ## Nu
 - [ ] Bekræft delt status mellem to telefoner (deploy + DB er live).
-- [ ] Tilføj husstandens profiler (initialer).
 - [ ] **Klor-doser:** indtast løbende klor + Klor Starter-chok når guiderne er modtaget (placeholdere står "doser følger" i UI'et og prompten).
 
 ## Snart
-- [ ] "Sæsonstart"-knap der nulstiller cyklus og sætter opstartsdoser.
-- [ ] Lille badge på fanen "I dag" med antal forfaldne opgaver.
 - [ ] Eksportér log til CSV (til ReRise BI-vanen).
 - [ ] Cyanursyre-måling (klor-system) som tredje hurtig-måling.
 
 ## Måske / nice-to-have
 - [ ] Push-/mail-påmindelse om morgenen (kræver baggrundsjob — vej op mod "hold det simpelt").
 - [ ] Flere produkter (pH-Minus/-Plus mængdeforslag, Flocking Sticks-tilstand).
-- [ ] Simpel adgangskode/PIN hvis det offentlige Railway-link skal beskyttes.
-- [ ] Ekstra dosis: mulighed for at indtaste egen mængde (i stedet for den faste).
 - [ ] Vis dagens ekstra doser som små chips på "I dag"-fanen.
 - [ ] Påmindelse hvis pH/ilt ikke er målt i X dage.
 
 ## Gjort
+- [x] Sæson-guide: luk ned til vinter og start op om foråret (Swim & Funs guider + WinterCare skaleret til poolen).
+- [x] Backup: admin/editor kan hente hele adressens data som JSON.
+- [x] Badge på "I dag" med antal forfaldne opgaver.
+- [x] Ekstra dosis kan registreres med egen mængde.
 - [x] PWA: appen kan lægges på hjemmeskærmen (manifest, ikoner, cache-fri service worker).
 - [x] Trendgraf over pH/ilt/klor/vandtemp med målområde; historik genskabt fra loggen.
 - [x] Login i fire etaper: backup + additivt skema, sessions/Google/e-mail-kode, rolletjek på alle endpoints, adresser + brugeradministration.

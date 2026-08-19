@@ -2,6 +2,17 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-08-19 — Sæson-guide, backup, opgave-badge og egen dosismængde
+- **Sæson-guide** (Indstillinger → "Sæson"): nedlukning til vinter i 10 trin og opstart om foråret i 5, bygget på Swim & Funs egne guider. Nøgletal fra kilderne: luk først når vandet er **under 10 °C**, pH 7,0–7,4 → chokbehandling → WinterCare → filter ca. **6 timer**, vandstand **15 cm under returslangen**, vinterpude pustet **60–80 %** op, og pumpe/filter/varmepumpe tømmes helt for vand.
+- **WinterCare doseres efter vandhårdhed** (400–800 ml pr. 10.000 L). Tabellen vises skaleret til poolens størrelse — for 16.000 L bliver det 640–1.280 ml. Verificeret: 640 ml ved 0–6 °dH.
+- Bemærk fra kilderne: WinterCare *"forhindrer ikke isdannelse i poolen! Benyt altid et vintercover."*
+- **Varsel på "I dag"** når en frisk vandtemperatur er under 10 °C: tid til at lukke ned.
+- **Backup:** nyt `GET /api/pools/{id}/export` (admin/editor) + knap i Indstillinger, der henter hele adressens data som JSON — indstillinger, log, målinger, plan og hvem der har adgang. Ingen koder eller tokens med i eksporten.
+- **Badge på "I dag"-fanen** med antal forfaldne opgaver.
+- **Ekstra dosis med egen mængde:** "+ Givet" åbner nu et felt, der er forudfyldt med standarddosis, så man kan rette til fx en halv dosis. Loggen — og dermed AI-planens grundlag — bliver derfor sand.
+- Ryddet forældede TODO-punkter: profiler og PIN-beskyttelse blev løst med login-systemet.
+- Verificeret i browser: badge viser 8 forfaldne, vinter-varsel udløses ved 8 °C, begge sæson-faner viser deres trin, WinterCare skalerer korrekt, og mængdefeltet åbner forudfyldt med "240 g".
+
 ## 2026-06-23 — Gratis morgenplan + fastlåst kvote-tæller i chatten
 - **Dagens første plan er gratis** (`AI_FREE_PER_DAY = {"plan": 1}`), så den automatiske morgenplan ikke bruger af kvoten. Man har altså 1 gratis + 5 planer og 5 chat-beskeder pr. dag.
 - Bevidst valg: det gratis kald gives til dagens **første** plan uanset om den er automatisk eller manuel. Havde vi stolet på et "auto"-flag fra browseren, kunne en klient bare påstå at hvert kald var automatisk.

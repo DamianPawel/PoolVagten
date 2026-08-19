@@ -141,6 +141,29 @@ Aktiv ilt og klor er kompatible — man må godt have begge dele i badevandet. A
 
 KILDER (henvis gerne til dem, men gengiv kun det der står ovenfor):
 swim-fun.com/dk/artikler/gront-vand-i-poolen, /maelkehvidt-vand-i-poolen, /taaget-og-uklart-vand-i-poolen, /ph-vaerdi-i-poolen, /viden-om-klor-og-aktiv-ilt samt produktsiderne under /sortiment/vandplejeprodukter.`;
+/* Sæson: nedlukning og opstart. Ordlyd følger Swim & Funs egne guider
+   (vinterklargoring-af-pool, guide-til-opstart-af-pool-efter-vinteren og
+   WinterCare-produktsiden) — se kildelisten i VERSIONS.md. */
+const SEASON_CLOSE = [
+  ["Vent til vandet er under 10 °C", "Poolsæsonen løber typisk fra april til september. Vent med at lukke ned, til vandtemperaturen er faldet til under 10 grader."],
+  ["Rens poolen samme dag", "Rens grundigt med bundsuger, poolrobot eller bundnet, tøm skimmerkurven og fjern blade fra overfladen. Gør det samme dag som nedlukningen, så snavset ikke når at samle sig i vandet — det giver mindre arbejde til foråret."],
+  ["Justér pH til 7,0–7,4", "Mål med teststrimler og justér med pH-Plus eller pH-Minus. Den rigtige pH hen over vinteren forebygger kalk- og rustskader."],
+  ["Chokbehandl vandet", "Efter pH-justeringen chokbehandles vandet, før WinterCare tilsættes."],
+  ["Tilsæt WinterCare", "WinterCare stabiliserer vandet hen over vinteren og forebygger kalkaflejringer og belægninger. Fortynd det i vand og fordel det ud over vandoverfladen, fx med en plastikvandkande. Dosis afhænger af vandets hårdhed — se mængderne herunder."],
+  ["Kør filteret i ca. 6 timer", "Så fordeles produkterne jævnt i vandet."],
+  ["Sænk vandstanden", "Sænk til ca. 15 cm vand under returslangen. Montér vinterpropper i returløbsdysen, og sørg for at skimmerlåget sidder på plads."],
+  ["Læg vinterudstyret i", "Vinterpude midt i poolen, pustet 60–80 % op så den kan trykkes sammen under is. Vinterflydere langs kanten og isbeskytter/gizmo i skimmeren reducerer frostskader."],
+  ["Tøm pumpe og filter for vand", "Tøm alt vand af cirkulationspumpe, filtertank, varmepumpe og elvarmer, så frost ikke sprænger noget. Afbryd strømmen til varmepumpen."],
+  ["Læg vintercover på", "Dæk poolen helt til, så snavs og urenheder ikke samler sig. WinterCare forhindrer ikke isdannelse — brug altid et vintercover."],
+];
+const SEASON_OPEN = [
+  ["Find udstyr og produkter frem", "Saml det du skal bruge, inden du går i gang."],
+  ["Pak vinterudstyret væk", "Fjern vinterdækket, pak vinterpude og flydere væk, fjern vinterproppen og montér skimmerens udgangsdyse. Kontrollér filtersystem og varmepumpe."],
+  ["Rengør poolen", "Fjern kalk, rust, blade og belægninger fra sider og bund."],
+  ["Fyld vand på", "Påfyld vand og tænd for filtersystemet."],
+  ["Justér pH og desinficér", "Bring pH på plads (7,0–7,4) og giv opstartsdosis, så vandet er klar til sæsonen."],
+];
+
 /* Dokumenterede ventetider EFTER en dosering (kun dem producenten faktisk angiver). */
 const DOSE_WAIT = {
   "Metal Out": { h:48, text:"Lad poolsystemet køre i mindst 48 timer. Backwash derefter filteret eller vask dine FilterBalls, og justér pH." },
@@ -535,7 +558,9 @@ REGLER:
   if(cfg.useWaterfall)alerts.push({kind:"warn",icon:Waves,text:"Vandfald aktivt — luftningen hæver pH. Mål pH ekstra ofte og hav pH-Minus klar."});
   if(cfg.uvLamp)alerts.push({kind:"info",icon:Sun,text:"UV-lys aktivt — kemiforbruget er sat ned, men mål stadig jævnligt. UV virker kun mens pumpen kører; skift pæren årligt."});
   measureSuggestions(cfg,state.readings,d).forEach(m=>alerts.push({kind:m.kind,icon:Beaker,text:m.text}));
+  if(wtFresh!=null&&wtFresh<10) alerts.push({kind:"info",icon:Waves,text:`Badevandet er ${wtR.value} °C. Under 10 grader er det tid til at lukke poolen ned for vinteren — se guiden under Indstillinger.`});
   const tasks=buildTasks(cfg,d);
+  const dueCount=tasks.filter(t=>!state.checks[`${today()}::${t.id}`]&&isDue(state.checks,t)).length;
   const dueFu=[]; { const seen={}; for(const f of (state.followups||[])){ if(f.due<=today()&&!seen[f.name]){ seen[f.name]=1; dueFu.push(f); } } }
 
   return (
@@ -659,8 +684,9 @@ REGLER:
 
       <nav style={navBar}>
         {[["home",Home,"I dag"],["plan",Sparkles,"Plan"],["chat",MessageCircle,"Spørg"],["log",History,"Log"],["settings",Settings,"Indstil."]].map(([id,Icon,label])=>(
-          <button key={id} className="pv-btn" onClick={()=>setTab(id)} style={{...navItem,color:tab===id?T.teal:T.sub}}>
+          <button key={id} className="pv-btn" onClick={()=>setTab(id)} style={{...navItem,color:tab===id?T.teal:T.sub,position:"relative"}}>
             <Icon size={20} strokeWidth={tab===id?2.6:2}/><span style={{fontSize:11,fontWeight:tab===id?700:500}}>{label}</span>
+            {id==="home"&&dueCount>0&&<span style={{position:"absolute",top:-1,right:4,minWidth:17,height:17,padding:"0 4px",borderRadius:999,background:T.aqua,color:T.ink,fontSize:10.5,fontWeight:800,display:"grid",placeItems:"center",lineHeight:1}}>{dueCount}</span>}
           </button>
         ))}
       </nav>
@@ -735,6 +761,8 @@ function Reading({label,hint,placeholder,last,onSave}){ const [v,setV]=useState(
 }
 function DoseRow({a,b,c,last,onLog,info,wait}){
   const [open,setOpen]=useState(false);
+  const [amt,setAmt]=useState(null);          // null = ikke i gang med at registrere
+  const confirm=()=>{ onLog(a,(amt||"").trim()||c); setAmt(null); };
   const hLeft=wait?Math.max(1,Math.round(wait.h-wait.passed)):0;
   const dLeft=hLeft>=24?Math.round(hLeft/24*10)/10:0;
   const left=hLeft>=24?`${dLeft}`.replace(".",",")+(dLeft===1?" dag":" dage"):`${hLeft} t`;
@@ -745,8 +773,16 @@ function DoseRow({a,b,c,last,onLog,info,wait}){
         <div style={{fontSize:11.5,color:T.sub}}>{b}</div>
       </button>
       <div style={{fontSize:14,fontWeight:800,color:T.teal,whiteSpace:"nowrap"}}>{c}</div>
-      {onLog&&<button className="pv-btn" onClick={()=>onLog(a,c)} title="Registrér som givet i dag" style={{...miniPill,background:T.aquaSoft,color:T.teal,flexShrink:0}}>+ Givet</button>}
+      {onLog&&<button className="pv-btn" onClick={()=>setAmt(v=>v===null?c:null)} title="Registrér som givet" style={{...miniPill,background:amt!==null?T.teal:T.aquaSoft,color:amt!==null?"#fff":T.teal,flexShrink:0}}>+ Givet</button>}
     </div>
+    {amt!==null&&<div style={{display:"flex",gap:8,alignItems:"center",padding:"0 16px 12px"}}>
+      <span style={{fontSize:12,color:T.sub,whiteSpace:"nowrap"}}>Mængde</span>
+      <input className="pv-in" autoFocus value={amt} onChange={e=>setAmt(e.target.value)}
+        onKeyDown={e=>{ if(e.key==="Enter")confirm(); if(e.key==="Escape")setAmt(null); }}
+        style={{...inStyle,flex:1,padding:"7px 9px",fontSize:13.5}}/>
+      <button className="pv-btn" onClick={confirm} style={{...miniPill,background:T.teal,color:"#fff",flexShrink:0}}>Gem</button>
+      <button className="pv-btn" onClick={()=>setAmt(null)} style={{...miniPill,background:"none",color:T.sub,flexShrink:0}}>Fortryd</button>
+    </div>}
     {wait&&<div style={{margin:"0 16px 11px",padding:"9px 11px",background:T.infoBg,borderRadius:10,fontSize:12,color:T.info,lineHeight:1.5}}>
       ⏳ <b>Afventer ~{left}</b> — {wait.text}
     </div>}
@@ -969,6 +1005,46 @@ function TrendView({history,system}){
     </section>}
   </>;
 }
+function SeasonView({cfg}){
+  const [tab,setTab]=useState("close");
+  const [open,setOpen]=useState(false);
+  const steps=tab==="close"?SEASON_CLOSE:SEASON_OPEN;
+  const f=cfg.poolSize/10000;
+  // WinterCare doseres efter vandets hårdhed (ml pr. 10.000 L) — skaleret til poolen.
+  const wc=[["0–6 °dH",400],["7–12 °dH",500],["13–18 °dH",600],["19–25 °dH",700],["over 25 °dH",800]];
+  return <>
+    <button className="pv-btn" onClick={()=>setOpen(o=>!o)} style={{...card,width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",fontFamily:FONT,fontSize:13.5,fontWeight:600,color:T.ink,marginTop:12,padding:"13px 15px"}}>
+      <span style={{display:"flex",alignItems:"center",gap:8}}><Waves size={15} color={T.teal}/>Sæson — luk ned og start op</span>
+      <ChevronDown size={18} color={T.sub} style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}/>
+    </button>
+    {open&&<section style={{...card,marginTop:8,padding:"12px 14px 14px"}}>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        {[["close","Luk ned til vinter"],["open","Start op om foråret"]].map(([k,l])=>(
+          <button key={k} className="pv-btn" onClick={()=>setTab(k)} style={{...miniPill,background:tab===k?T.teal:T.aquaSoft,color:tab===k?"#fff":T.tealDeep}}>{l}</button>
+        ))}
+      </div>
+      {steps.map(([title,body],i)=>(
+        <div key={i} style={{display:"flex",gap:11,paddingBottom:13,marginBottom:13,borderBottom:i<steps.length-1?`1px solid ${T.line}`:"none"}}>
+          <div style={{width:24,height:24,borderRadius:999,background:T.aquaSoft,color:T.tealDeep,display:"grid",placeItems:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{i+1}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:700,marginBottom:3}}>{title}</div>
+            <div style={{fontSize:12.5,color:T.sub,lineHeight:1.55}}>{body}</div>
+          </div>
+        </div>
+      ))}
+      {tab==="close"&&<div style={{background:T.aquaSoft,borderRadius:12,padding:"11px 13px",marginTop:2}}>
+        <div style={{fontSize:12,fontWeight:800,color:T.tealDeep,marginBottom:6}}>WinterCare til {cfg.poolSize.toLocaleString("da-DK")} L</div>
+        {wc.map(([label,ml])=>(
+          <div key={label} style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:T.tealDeep,padding:"2px 0"}}>
+            <span>{label}</span><b>{Math.round(ml*f).toLocaleString("da-DK")} ml</b>
+          </div>
+        ))}
+        <div style={{fontSize:11.5,color:T.teal,marginTop:7,lineHeight:1.5}}>Vælg linjen der passer til vandets hårdhed. Kender du den ikke, så spørg dit vandværk.</div>
+      </div>}
+      <p style={{fontSize:11,color:T.sub,margin:"12px 2px 0",lineHeight:1.5}}>Følger Swim & Funs guider til vinterklargøring og opstart samt WinterCare-etiketten.</p>
+    </section>}
+  </>;
+}
 const ROLE_LABEL={admin:"Admin",editor:"Editor",user:"Bruger"};
 function HouseholdView({showToast,authUser}){
   const [pools,setPools]=useState(null); const [users,setUsers]=useState(null);
@@ -1120,6 +1196,30 @@ function SettingsView({cfg,onSave,onReset,showToast,authUser}){ const [f,setF]=u
       <button className="pv-btn" onClick={save} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:14,fontFamily:FONT}}>Gem indstillinger</button>
       <button className="pv-btn" onClick={()=>{ if(confirmReset){ setConfirmReset(false); setWipeText(""); setWipeOpen(true); } else { setConfirmReset(true); setTimeout(()=>setConfirmReset(false),4000); } }} style={{width:"100%",background:confirmReset?T.danger:"none",color:confirmReset?"#fff":T.danger,border:`1.5px solid ${confirmReset?T.danger:T.dangerBg}`,borderRadius:12,padding:"11px",fontWeight:600,fontSize:13.5,cursor:"pointer",marginTop:10,fontFamily:FONT}}>{confirmReset?"Tryk igen for at nulstille log & plan":"Nulstil log & plan"}</button>
     </> : <p style={{fontSize:12.5,color:T.sub,margin:"14px 4px 0",lineHeight:1.55,background:T.infoBg,padding:"11px 13px",borderRadius:12}}>Du har rollen <b>bruger</b> og kan registrere det, du gør ved poolen — men ikke ændre indstillinger. Spørg en admin i husstanden, hvis noget skal rettes.</p>}
+
+    <SeasonView cfg={cfg}/>
+
+    {canEdit&&<>
+      <SectionTitle icon={History} title="Backup"/>
+      <section style={{...card,marginTop:0,padding:"14px 15px"}}>
+        <p style={{fontSize:12.5,color:T.sub,lineHeight:1.55,margin:"0 0 11px"}}>Hent en kopi af alt: indstillinger, log, målinger, plan og hvem der har adgang. Gem den et sikkert sted — så kan intet gå tabt, hvis databasen skulle fejle.</p>
+        <button className="pv-btn" onClick={async()=>{
+          try{
+            const r=await fetch(`/api/pools/${activePool()}/export`);
+            if(!r.ok)throw 0;
+            const data=await r.json();
+            const d=new Date(); const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+            const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement("a");
+            a.href=url; a.download=`poolvagten-backup-${stamp}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+            showToast("Backup hentet");
+          }catch{ showToast("Kunne ikke hente backup"); }
+        }} style={{width:"100%",background:T.teal,color:"#fff",border:"none",borderRadius:11,padding:"11px",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:FONT}}>Hent backup (JSON)</button>
+      </section>
+    </>}
 
     <HouseholdView showToast={showToast} authUser={authUser}/>
 

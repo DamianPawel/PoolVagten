@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.7.0** (2026-08-19) — sæson-guide (nedlukning/opstart), backup-eksport, badge med forfaldne opgaver og egen mængde ved ekstra dosis.
 **1.6.1** (2026-06-23) — dagens første plan er gratis (auto-morgenplanen), og kvote-tælleren klæber til toppen i Spørg.
 **1.6.0** (2026-06-23) — AI-kvote: 5 chat og 5 planer pr. person pr. dag, med synlig tæller og forberedt tilkøb.
 **1.5.0** (2026-06-23) — doseringsrækkefølge efter Swim & Funs trin 1–4, sikkerhedsregel om ikke at blande, og kildebekræftede ventetider.
@@ -90,5 +91,7 @@ Produkterne er hos Swim & Fun opdelt i fire trin, og **det er rækkefølgen**. A
 App'en holder systemerne adskilt: i aktiv ilt-tilstand vises kun ilt-produkter, i klor-tilstand kun klor — ingen krydsanbefalinger. (Klor og aktiv ilt er teknisk kompatible iflg. Swim & Fun, men appen blander dem ikke.)
 Flokning, sandfilter: i skimmeren mens pumpen kører → returskyl efter 2–3 dage. Patronfilter: pumpe slukket, bundfæld 1–2 dage, støvsug. FilterBalls: kun SeaKlear.
 UV-faktor (×0,6 på løbende desinfektion) er vejledende — verificér med teststrips.
+
+> Sæson: guiderne "Vinterklargøring af pool" og "Guide til opstart af pool efter vinteren" samt WinterCare-produktsiden (dosering efter vandhårdhed, 400–800 ml pr. 10.000 L).
 
 > Kilde: Swim & Funs produktsider (pH-Minus, pH-Plus, Metal Out, CombiTabs klorfri, Aktivator, KlarPool, FlokPool, SeaKlear, Teststrimler Aktivt Oxygen) og artikler (klor vs. aktiv ilt, pH-værdi, grønt/mælkehvidt/tåget vand), juni 2026. Klor-doser tilføjes når guiderne modtages.

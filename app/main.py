@@ -389,7 +389,7 @@ async def lifespan(_: FastAPI):
         await _pool.close()
 
 
-app = FastAPI(title="Poolvagten", version="1.6.1", lifespan=lifespan)
+app = FastAPI(title="Poolvagten", version="1.7.0", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -749,6 +749,36 @@ async def add_pool_user(pool_id: int, req: MemberRequest, request: Request) -> d
             req.role,
         )
     return {"ok": True, "user_id": uid}
+
+
+@app.get("/api/pools/{pool_id}/export")
+async def export_pool(pool_id: int, request: Request) -> dict:
+    """Hele adressens data som JSON — så husstanden selv kan gemme en backup.
+
+    Kun admin/editor. Indeholder ingen logins eller koder: kun poolens eget
+    dokument plus navn og hvem der har adgang (uden hemmeligheder).
+    """
+    await require_role(request, "editor", pool_id)
+    data = await get_state(pool_id) or {}
+    out = {"exported_at": None, "pool_id": pool_id, "state": data}
+    if _pool:
+        async with _pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT name, updated_at FROM pool_state WHERE id = $1", pool_id
+            )
+            if row:
+                out["name"] = row["name"]
+                out["exported_at"] = row["updated_at"].isoformat()
+            members = await conn.fetch(
+                """
+                SELECT u.email, u.name, u.initials, m.role
+                  FROM users u JOIN memberships m ON m.user_id = u.id
+                 WHERE m.pool_id = $1 ORDER BY u.id
+                """,
+                pool_id,
+            )
+            out["members"] = [dict(m) for m in members]
+    return out
 
 
 class BonusRequest(BaseModel):
