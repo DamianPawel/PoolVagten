@@ -2,6 +2,20 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — AI-kvote: 5 chat + 5 planer pr. person pr. dag
+Formål: holde token-forbruget nede, med plads til tilkøb senere. Afklaret i pingpong: kvote **pr. person** (ikke pr. husstand), **separate** kvoter for chat og plan, og **synlig tæller** i UI fra start.
+
+- Ny tabel `ai_usage(user_id, day, kind, count)` — én tæller pr. bruger, dag og type. Additiv, som altid.
+- `users` fik `ai_bonus` (tilkøbte ekstra kald, klar til senere salg) og `ai_limit` (personlig grænse der overstyrer standarden).
+- Standard 5 pr. type pr. dag via `AI_DAILY_LIMIT`. Er dagskvoten brugt, trækkes der automatisk af `ai_bonus`; er den også tom, svarer serveren **429** med en venlig dansk besked.
+- Tælling og afvisning sker **før** kaldet til Anthropic, så en afvist forespørgsel ikke koster tokens.
+- `consume_ai` kører i en transaktion med `SELECT ... FOR UPDATE`, så to samtidige forespørgsler ikke kan omgå grænsen.
+- UI: `QuotaBadge` viser "x af y tilbage i dag" ved både Spørg og Plan, og skifter til "Kvote brugt i dag" i advarselsfarve. Kvoten returneres direkte i svaret fra `/api/plan` og `/api/chat`, så tælleren opdateres uden ekstra kald.
+- 429 håndteres pænt: i chatten som en besked i tråden, på Plan-fanen som fejltekst under knappen.
+- Bemærk: den automatiske morgenplan bruger én af dagens fem planer (efter ønske om at planer også tælles).
+- Nødventil indtil rigtigt tilkøb: `POST /api/pools/{id}/users/{uid}/ai-bonus` (kun admin) lægger ekstra kald til en bruger. Intet UI endnu.
+- Verificeret i browser med mockede kvoter: "3 af 5 tilbage i dag" og "Kvote brugt i dag" med korrekt advarselsfarve.
+
 ## 2026-06-23 — "Spørg"-chatten: kildegrundlag og emne-afgrænsning
 - Chatten stod tidligere kun på poolens egne tal. Nu får den `GUIDE`-konstanten med **Swim & Funs retningslinjer**: trin 1–4-rækkefølgen, håndteringsreglerne ("må aldrig blandes", egen spand, vand først, pumpen kører), de dokumenterede ventetider, og behandlingsforløbene for grønt/mælkehvidt/tåget vand. Plus kildelinks den kan henvise til.
 - Læste yderligere artikler til grundlaget: mælkehvidt vand, tåget/uklart vand, viden om klor og aktiv ilt. Alle tre problemløsnings-artikler følger samme forløb: rengør/filter → pH → chok → flokning (24 t) → fjern bundfald.

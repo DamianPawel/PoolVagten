@@ -45,6 +45,13 @@ COOKIE = "pv_session"
 SESSION_DAYS = 30
 ROLES = ("admin", "editor", "user")
 
+# --- AI-kvote -------------------------------------------------------------- #
+# Hver bruger har sin egen daglige kvote pr. type: 5 chat-beskeder og 5
+# plan-genereringer. Kan hæves pr. bruger (users.ai_limit) eller via tilkøbte
+# ekstra kald (users.ai_bonus), som bruges når dagens kvote er opbrugt.
+AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "5"))
+AI_KINDS = ("chat", "plan")
+
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
 STATE_FILE = Path(os.getenv("STATE_FILE", BASE.parent / "pool_state.json"))
@@ -107,6 +114,21 @@ async def _db_init() -> None:
              WHERE name IS NULL
             """
         )
+        # --- AI-forbrug: én tæller pr. bruger, dag og type (chat/plan) ------ #
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_usage (
+                user_id INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                day     DATE NOT NULL,
+                kind    TEXT NOT NULL,
+                count   INT  NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, day, kind)
+            )
+            """
+        )
+        # Tilkøbte ekstra kald (klar til senere salg) og evt. personlig grænse.
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_bonus INT NOT NULL DEFAULT 0")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_limit INT")
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +225,72 @@ async def current_user(request: Request) -> dict | None:
     return await user_by_id(uid) if uid else None
 
 
+async def ai_quota(uid: int | None) -> dict:
+    """Dagens AI-forbrug og hvad der er tilbage, pr. type."""
+    out = {"limit": AI_DAILY_LIMIT, "bonus": 0, "used": {k: 0 for k in AI_KINDS}}
+    if not (_pool and uid):
+        return out
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT ai_limit, ai_bonus FROM users WHERE id = $1", uid
+        )
+        if row:
+            out["limit"] = row["ai_limit"] or AI_DAILY_LIMIT
+            out["bonus"] = row["ai_bonus"] or 0
+        rows = await conn.fetch(
+            "SELECT kind, count FROM ai_usage WHERE user_id = $1 AND day = CURRENT_DATE",
+            uid,
+        )
+        for r in rows:
+            out["used"][r["kind"]] = r["count"]
+    out["left"] = {
+        k: max(0, out["limit"] - out["used"].get(k, 0)) + out["bonus"] for k in AI_KINDS
+    }
+    return out
+
+
+async def consume_ai(uid: int | None, kind: str) -> None:
+    """Tæl et AI-kald og afvis hvis dagens kvote (plus tilkøb) er brugt op."""
+    if not (_pool and uid):
+        return  # uden login (fx lokal udvikling) er der ingen kvote
+    async with _pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT ai_limit, ai_bonus FROM users WHERE id = $1 FOR UPDATE", uid
+            )
+            limit = (row["ai_limit"] if row else None) or AI_DAILY_LIMIT
+            bonus = (row["ai_bonus"] if row else 0) or 0
+            used = await conn.fetchval(
+                """
+                SELECT count FROM ai_usage
+                 WHERE user_id = $1 AND day = CURRENT_DATE AND kind = $2
+                """,
+                uid,
+                kind,
+            ) or 0
+            if used >= limit:
+                # Dagens kvote er brugt — tag af de tilkøbte kald hvis der er nogen.
+                if bonus <= 0:
+                    raise HTTPException(
+                        429,
+                        "Du har brugt dagens AI-kvote. Prøv igen i morgen — "
+                        "eller bed en admin om at tilføje flere kald.",
+                    )
+                await conn.execute(
+                    "UPDATE users SET ai_bonus = ai_bonus - 1 WHERE id = $1", uid
+                )
+            await conn.execute(
+                """
+                INSERT INTO ai_usage (user_id, day, kind, count)
+                VALUES ($1, CURRENT_DATE, $2, 1)
+                ON CONFLICT (user_id, day, kind)
+                DO UPDATE SET count = ai_usage.count + 1
+                """,
+                uid,
+                kind,
+            )
+
+
 async def upsert_login(email: str, name: str, google_sub: str | None) -> dict:
     """Find eller opret brugeren, og giv den allerførste bruger admin.
 
@@ -283,7 +371,7 @@ async def lifespan(_: FastAPI):
         await _pool.close()
 
 
-app = FastAPI(title="Poolvagten", version="1.5.0", lifespan=lifespan)
+app = FastAPI(title="Poolvagten", version="1.6.0", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -335,7 +423,7 @@ def _redirect_uri(request: Request) -> str:
 @app.get("/api/auth/me")
 async def auth_me(request: Request) -> dict:
     user = await current_user(request)
-    return {"user": user}
+    return {"user": user, "ai": await ai_quota(user["id"] if user else None)}
 
 
 class LoginRequest(BaseModel):
@@ -645,6 +733,30 @@ async def add_pool_user(pool_id: int, req: MemberRequest, request: Request) -> d
     return {"ok": True, "user_id": uid}
 
 
+class BonusRequest(BaseModel):
+    calls: int = 5
+
+
+@app.post("/api/pools/{pool_id}/users/{user_id}/ai-bonus")
+async def grant_ai_bonus(pool_id: int, user_id: int, req: BonusRequest, request: Request) -> dict:
+    """Giv en bruger ekstra AI-kald ud over dagens kvote.
+
+    Nødventil indtil egentligt tilkøb findes: kaldene lægges i users.ai_bonus
+    og bruges automatisk når dagskvoten er opbrugt. Kun admin på adressen.
+    """
+    await require_role(request, "admin", pool_id)
+    n = max(-1000, min(1000, int(req.calls)))
+    async with _pool.acquire() as conn:
+        left = await conn.fetchval(
+            "UPDATE users SET ai_bonus = GREATEST(0, ai_bonus + $1) WHERE id = $2 RETURNING ai_bonus",
+            n,
+            user_id,
+        )
+    if left is None:
+        raise HTTPException(404, "Brugeren findes ikke.")
+    return {"ok": True, "ai_bonus": left}
+
+
 @app.delete("/api/pools/{pool_id}/users/{user_id}")
 async def remove_pool_user(pool_id: int, user_id: int, request: Request) -> dict:
     me = await require_role(request, "admin", pool_id)
@@ -768,9 +880,10 @@ class PlanRequest(BaseModel):
 
 @app.post("/api/plan")
 async def plan(req: PlanRequest, request: Request) -> dict:
-    await require_role(request, "user")
+    user = await require_role(request, "user")
+    await consume_ai(user["id"] if user else None, "plan")
     text = await _anthropic({"messages": [{"role": "user", "content": req.prompt}]}, max_tokens=1000)
-    return {"text": text}
+    return {"text": text, "ai": await ai_quota(user["id"] if user else None)}
 
 
 # Fast emne-afgrænsning for "Spørg"-chatten. Sættes altid forrest i
@@ -800,7 +913,8 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest, request: Request) -> dict:
-    await require_role(request, "user")
+    user = await require_role(request, "user")
+    await consume_ai(user["id"] if user else None, "chat")
     msgs = [{"role": m.role, "content": m.content} for m in req.messages][-20:]
     # Anthropic kræver at samtalen starter med en bruger-besked.
     while msgs and msgs[0]["role"] != "user":
@@ -812,7 +926,7 @@ async def chat(req: ChatRequest, request: Request) -> dict:
     # regel altid forrest, uanset hvad der bliver sendt.
     system = TOPIC_RULE + ("\n\n" + req.system.strip() if req.system.strip() else "")
     text = await _anthropic({"messages": msgs, "system": system}, max_tokens=700)
-    return {"text": text}
+    return {"text": text, "ai": await ai_quota(user["id"] if user else None)}
 
 
 # --------------------------------------------------------------------------- #

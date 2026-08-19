@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.6.0** (2026-06-23) — AI-kvote: 5 chat og 5 planer pr. person pr. dag, med synlig tæller og forberedt tilkøb.
 **1.5.0** (2026-06-23) — doseringsrækkefølge efter Swim & Funs trin 1–4, sikkerhedsregel om ikke at blande, og kildebekræftede ventetider.
 **1.4.0** (2026-06-23) — PWA (hjemmeskærm) og trendgraf over målinger.
 **1.3.0** (2026-06-23) — login (Google + e-mail/kode), roller pr. adresse (admin/editor/user), flere adresser pr. husstand, og lukkede API-endpoints bag login.
@@ -11,6 +12,7 @@
 ## Datamodel (Postgres)
 - `pool_state(id, name, data JSONB, updated_at)` — **én række pr. adresse/pool**; `id` er pool-id'et, `data` er husstandens JSON-dokument. Række 1 = den oprindelige pool.
 - `users(id, email, name, initials, password_hash, google_sub, created_at)` — login. Koder hashes med `hashlib.pbkdf2_hmac` (stdlib).
+- `ai_usage(user_id, day, kind, count)` — AI-forbrug pr. bruger, dag og type (`chat`/`plan`). `users.ai_bonus` = tilkøbte ekstra kald, `users.ai_limit` = personlig grænse.
 - `memberships(user_id, pool_id, role)` — rolle **pr. adresse**: `admin` (alt, inkl. brugere og sletning), `editor` (daglig drift, ikke brugere/sletning), `user` (registrere udført arbejde). Alle roller må bruge chat, se plan og log.
 
 ## Konfigurationsflag (ét JSON-dokument, `config`)
@@ -27,6 +29,7 @@
 | `ANTHROPIC_API_KEY` | Plan + chat, kun server-side |
 | `SESSION_SECRET` | Signerer session-cookies — **skift = alle logges ud** |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-login |
+| `AI_DAILY_LIMIT` | Antal AI-kald pr. person pr. dag pr. type (chat/plan). Standard `5` |
 | `REQUIRE_AUTH` | `1` = login kræves. Fjern variablen for at åbne appen igen (nødbremse) |
 
 ## Runtime

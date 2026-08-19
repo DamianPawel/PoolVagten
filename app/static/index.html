@@ -296,8 +296,8 @@ async function apiPutState(s){ try{ await fetch(`/api/state?pool=${activePool()}
 async function apiAuth(){ try{
   const [meR,hR]=await Promise.all([fetch("/api/auth/me"),fetch("/api/health")]);
   const me=await meR.json(); const h=await hR.json();
-  return { user:me.user||null, cfg:h.auth||{required:false,google:false,ready:false} };
-}catch{ return { user:null, cfg:{required:false,google:false,ready:false} }; } }
+  return { user:me.user||null, ai:me.ai||null, cfg:h.auth||{required:false,google:false,ready:false} };
+}catch{ return { user:null, ai:null, cfg:{required:false,google:false,ready:false} }; } }
 
 /* ===================================================================== */
 function Poolvagten(){
@@ -312,11 +312,12 @@ function Poolvagten(){
   const [planErr,setPlanErr]=useState(null);
   const [toast,setToast]=useState(null);
   const [chatBusy,setChatBusy]=useState(false);
+  const [aiQuota,setAiQuota]=useState(null);   // {limit,bonus,used,left} pr. type
   const stateRef=useRef(null); stateRef.current=state;
   const autoTriedRef=useRef(false);
 
   // Tjek login-status først. Er login ikke krævet (etape 2), fortsætter alt som før.
-  useEffect(()=>{ (async()=>{ const a=await apiAuth(); setAuth(a);
+  useEffect(()=>{ (async()=>{ const a=await apiAuth(); setAuth(a); if(a.ai)setAiQuota(a.ai);
     if(a.user&&a.user.initials&&!localStorage.getItem("pool:me")){ saveMe(a.user.initials); }
   })(); },[]);
   const needLogin=auth&&auth.cfg.required&&!auth.user;
@@ -400,7 +401,14 @@ function Poolvagten(){
     setChatBusy(true);
     try{
       const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:buildChatSystem(),messages:history})});
+      if(r.status===429){ const d=await r.json().catch(()=>({}));
+        setAiQuota(q=>q?{...q,left:{...q.left,chat:0}}:q);
+        const msg={role:"assistant",content:d.detail||"Du har brugt dagens AI-kvote. Prøv igen i morgen.",ts:Date.now(),quota:true};
+        await mutate(s=>({...s,chat:[...(s.chat||[]),msg].slice(-60)}));
+        return;
+      }
       if(!r.ok)throw 0; const data=await r.json();
+      if(data.ai)setAiQuota(data.ai);
       const asMsg={role:"assistant",content:(data.text||"").trim()||"(tomt svar)",ts:Date.now()};
       await mutate(s=>({...s,chat:[...(s.chat||[]),asMsg].slice(-60)}));
     }catch(e){ console.error(e); showToast("Kunne ikke få svar lige nu — prøv igen"); }
@@ -484,7 +492,13 @@ REGLER:
 - Hvis en opfølgning viser INGEN bedring: foreslå næste skridt (fx flokning efter KlarPool, justér pH, eller et chok) i stedet for at gentage det samme.
 - 1–4 actions pr. dag. Dansk, venligt, kort. Sæt alert til null hvis intet særligt.`;
       const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
-      const data=await r.json(); const clean=(data.text||"").replace(/```json|```/g,"").trim();
+      if(r.status===429){ const d=await r.json().catch(()=>({}));
+        setAiQuota(q=>q?{...q,left:{...q.left,plan:0}}:q);
+        setPlanErr(d.detail||"Du har brugt dagens kvote til planer. Prøv igen i morgen.");
+        setPlanLoading(false); return;
+      }
+      const data=await r.json(); if(data.ai)setAiQuota(data.ai);
+      const clean=(data.text||"").replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
       mutate(s=>({...s,plan:{generatedAt:Date.now(),days:parsed.days||[]}}));
     }catch(e){ console.error(e); setPlanErr("Kunne ikke hente planen lige nu. Prøv igen om lidt."); }
@@ -636,9 +650,9 @@ REGLER:
           <p style={{fontSize:11.5,color:T.sub,margin:"12px 4px 0",lineHeight:1.5}}>{d.uv?"UV-lys reducerer de løbende desinfektionsdoser (vejledende) — mål altid med teststrimler for at bekræfte. ":""}Tryk på et <b>produktnavn</b> for producentens fremgangsmåde. Tryk <b>+ Givet</b> for at registrere en dosis — den havner i loggen og tages med i næste plan. Brug dunkens låg som målebæger.</p>
         </>}
 
-        {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan}/>}
+        {tab==="plan" && <PlanView state={state} planLoading={planLoading} planErr={planErr} onGenerate={generatePlan} ai={aiQuota}/>}
         {tab==="log" && <LogView log={state.log||[]} onDelete={deleteLog}/>}
-        {tab==="chat" && <ChatView chat={state.chat||[]} onSend={sendChat} busy={chatBusy} onClear={()=>mutate(s=>({...s,chat:[]}))}/>}
+        {tab==="chat" && <ChatView chat={state.chat||[]} onSend={sendChat} busy={chatBusy} onClear={()=>mutate(s=>({...s,chat:[]}))} ai={aiQuota}/>}
         {tab==="settings" && <SettingsView cfg={cfg} onSave={c=>mutate(s=>({...s,config:c}))} showToast={showToast} authUser={auth&&auth.user}
           onReset={()=>mutate(s=>({...s,checks:{},log:[],readings:{},plan:null}))}/>}
       </div>
@@ -739,11 +753,12 @@ function DoseRow({a,b,c,last,onLog,info,wait}){
     {open&&info&&<div style={{padding:"0 16px 13px",fontSize:12.5,color:T.sub,lineHeight:1.55}}>{info}</div>}
   </div>;
 }
-function PlanView({state,planLoading,planErr,onGenerate}){ const plan=state.plan;
+function PlanView({state,planLoading,planErr,onGenerate,ai}){ const plan=state.plan;
   return <>
     <SectionTitle icon={Sparkles} title="Plan for de næste dage"/>
     <section style={{...card,textAlign:"center",padding:"16px 16px 18px"}}>
-      <p style={{fontSize:13,color:T.sub,margin:"0 0 14px",lineHeight:1.5}}>Claude lægger en plan ud fra vejrudsigten, dine doser og hvornår du sidst gav OxyChock. Den opdaterer automatisk hver morgen — eller tryk her.</p>
+      <p style={{fontSize:13,color:T.sub,margin:"0 0 12px",lineHeight:1.5}}>Claude lægger en plan ud fra vejrudsigten, dine doser og hvornår du sidst gav OxyChock. Den opdaterer automatisk hver morgen — eller tryk her.</p>
+      <div style={{marginBottom:12}}><QuotaBadge ai={ai} kind="plan"/></div>
       <button className="pv-btn" onClick={onGenerate} disabled={planLoading} style={{background:T.teal,color:"#fff",border:"none",borderRadius:11,padding:"11px 18px",fontWeight:700,fontSize:14,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,fontFamily:FONT,opacity:planLoading?.7:1}}>
         {planLoading?<RefreshCw size={16} className="pv-wave"/>:<Sparkles size={16}/>}{planLoading?"Lægger plan…":plan?"Opdatér plan":"Generér plan"}
       </button>
@@ -843,7 +858,15 @@ function LoginView({google}){
     </div>
   </div>;
 }
-function ChatView({chat,onSend,busy,onClear}){
+const QuotaBadge=({ai,kind})=>{
+  if(!ai||!ai.left)return null;
+  const left=ai.left[kind]; const total=(ai.limit||0)+(ai.bonus||0);
+  const out=left<=0;
+  return <span style={{...badge,background:out?T.warnBg:T.aquaSoft,color:out?T.warn:T.tealDeep,whiteSpace:"nowrap"}}>
+    {out?"Kvote brugt i dag":`${left} af ${total} tilbage i dag`}
+  </span>;
+};
+function ChatView({chat,onSend,busy,onClear,ai}){
   const [text,setText]=useState("");
   const endRef=useRef(null);
   useEffect(()=>{ if(endRef.current)endRef.current.scrollIntoView({behavior:"smooth"}); },[chat.length,busy]);
@@ -851,7 +874,9 @@ function ChatView({chat,onSend,busy,onClear}){
   return <>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <SectionTitle icon={MessageCircle} title="Spørg om poolen"/>
-      {chat.length>0&&<button className="pv-btn" onClick={onClear} style={{background:"none",border:"none",color:T.sub,fontSize:12,cursor:"pointer",fontFamily:FONT,marginTop:14}}>Ryd</button>}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:14}}><QuotaBadge ai={ai} kind="chat"/>
+      {chat.length>0&&<button className="pv-btn" onClick={onClear} style={{background:"none",border:"none",color:T.sub,fontSize:12,cursor:"pointer",fontFamily:FONT}}>Ryd</button>}
+      </div>
     </div>
     <section style={{...card,padding:12,minHeight:220,display:"flex",flexDirection:"column"}}>
       {chat.length===0&&<div style={{color:T.sub,fontSize:13,textAlign:"center",padding:"24px 8px",lineHeight:1.6}}>Spørg om hvad som helst — fx "Det er meget varmt, skal jeg give mere ilt?" eller "Vandet er mælkehvidt, hvad gør jeg?". Jeg kender jeres system, satser, seneste målinger og log.</div>}
