@@ -236,7 +236,12 @@ def _billable(used: int, kind: str) -> int:
 
 async def ai_quota(uid: int | None) -> dict:
     """Dagens AI-forbrug og hvad der er tilbage, pr. type."""
-    out = {"limit": AI_DAILY_LIMIT, "bonus": 0, "used": {k: 0 for k in AI_KINDS}}
+    out = {
+        "limit": AI_DAILY_LIMIT,
+        "bonus": 0,
+        "free": AI_FREE_PER_DAY,
+        "used": {k: 0 for k in AI_KINDS},
+    }
     if not (_pool and uid):
         # Uden login (fx lokal udvikling) er der ingen kvote — meld fuldt hus,
         # så svaret altid har samme form.
@@ -255,7 +260,6 @@ async def ai_quota(uid: int | None) -> dict:
         )
         for r in rows:
             out["used"][r["kind"]] = r["count"]
-    out["free"] = AI_FREE_PER_DAY
     out["left"] = {
         k: max(0, out["limit"] - _billable(out["used"].get(k, 0), k)) + out["bonus"]
         for k in AI_KINDS
