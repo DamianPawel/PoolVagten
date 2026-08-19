@@ -2,6 +2,13 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-06-23 — Gratis morgenplan + fastlåst kvote-tæller i chatten
+- **Dagens første plan er gratis** (`AI_FREE_PER_DAY = {"plan": 1}`), så den automatiske morgenplan ikke bruger af kvoten. Man har altså 1 gratis + 5 planer og 5 chat-beskeder pr. dag.
+- Bevidst valg: det gratis kald gives til dagens **første** plan uanset om den er automatisk eller manuel. Havde vi stolet på et "auto"-flag fra browseren, kunne en klient bare påstå at hvert kald var automatisk.
+- `_billable()` trækker de gratis kald fra både i grænsetjekket og i tælleren, så de to altid følges ad.
+- **Kvote-tælleren i Spørg klæber nu til toppen** (`position: sticky`), så man altid kan se hvor mange spørgsmål der er tilbage — også midt i en lang samtale. Bjælken går ud i fuld bredde med baggrundsfarve, så beskederne ikke skinner igennem.
+- Verificeret i browser ved 375×812: badge'en bliver på y=20 efter 3000 px scroll. (Første måling fejlede, fordi preview-panelet havde `innerHeight: 0` — sticky har intet at klæbe til uden viewport. Test-artefakt, ikke en kodefejl.)
+
 ## 2026-06-23 — AI-kvote: 5 chat + 5 planer pr. person pr. dag
 Formål: holde token-forbruget nede, med plads til tilkøb senere. Afklaret i pingpong: kvote **pr. person** (ikke pr. husstand), **separate** kvoter for chat og plan, og **synlig tæller** i UI fra start.
 

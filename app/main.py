@@ -51,6 +51,10 @@ ROLES = ("admin", "editor", "user")
 # ekstra kald (users.ai_bonus), som bruges når dagens kvote er opbrugt.
 AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "5"))
 AI_KINDS = ("chat", "plan")
+# Dagens første plan er gratis, så den automatiske morgenplan ikke bruger af
+# kvoten. Bevidst uafhængig af om kaldet kommer automatisk eller manuelt —
+# så kan en klient ikke få ekstra kald ved at påstå at den er automatisk.
+AI_FREE_PER_DAY = {"plan": 1}
 
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
@@ -225,6 +229,11 @@ async def current_user(request: Request) -> dict | None:
     return await user_by_id(uid) if uid else None
 
 
+def _billable(used: int, kind: str) -> int:
+    """Hvor mange af dagens kald der tæller mod kvoten (de gratis trækkes fra)."""
+    return max(0, used - AI_FREE_PER_DAY.get(kind, 0))
+
+
 async def ai_quota(uid: int | None) -> dict:
     """Dagens AI-forbrug og hvad der er tilbage, pr. type."""
     out = {"limit": AI_DAILY_LIMIT, "bonus": 0, "used": {k: 0 for k in AI_KINDS}}
@@ -246,8 +255,10 @@ async def ai_quota(uid: int | None) -> dict:
         )
         for r in rows:
             out["used"][r["kind"]] = r["count"]
+    out["free"] = AI_FREE_PER_DAY
     out["left"] = {
-        k: max(0, out["limit"] - out["used"].get(k, 0)) + out["bonus"] for k in AI_KINDS
+        k: max(0, out["limit"] - _billable(out["used"].get(k, 0), k)) + out["bonus"]
+        for k in AI_KINDS
     }
     return out
 
@@ -271,7 +282,7 @@ async def consume_ai(uid: int | None, kind: str) -> None:
                 uid,
                 kind,
             ) or 0
-            if used >= limit:
+            if _billable(used, kind) >= limit:
                 # Dagens kvote er brugt — tag af de tilkøbte kald hvis der er nogen.
                 if bonus <= 0:
                     raise HTTPException(
@@ -374,7 +385,7 @@ async def lifespan(_: FastAPI):
         await _pool.close()
 
 
-app = FastAPI(title="Poolvagten", version="1.6.0", lifespan=lifespan)
+app = FastAPI(title="Poolvagten", version="1.6.1", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #

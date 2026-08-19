@@ -872,10 +872,13 @@ function ChatView({chat,onSend,busy,onClear,ai}){
   useEffect(()=>{ if(endRef.current)endRef.current.scrollIntoView({behavior:"smooth"}); },[chat.length,busy]);
   const send=()=>{ const t=text.trim(); if(!t||busy)return; setText(""); onSend(t); };
   return <>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <SectionTitle icon={MessageCircle} title="Spørg om poolen"/>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:14}}><QuotaBadge ai={ai} kind="chat"/>
-      {chat.length>0&&<button className="pv-btn" onClick={onClear} style={{background:"none",border:"none",color:T.sub,fontSize:12,cursor:"pointer",fontFamily:FONT}}>Ryd</button>}
+    {/* Klæber til toppen, så man altid kan se hvor mange spørgsmål der er tilbage. */}
+    <div style={{position:"sticky",top:0,zIndex:20,background:T.bg,paddingBottom:6,margin:"0 -14px",padding:"0 14px 6px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <SectionTitle icon={MessageCircle} title="Spørg om poolen"/>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:14}}><QuotaBadge ai={ai} kind="chat"/>
+        {chat.length>0&&<button className="pv-btn" onClick={onClear} style={{background:"none",border:"none",color:T.sub,fontSize:12,cursor:"pointer",fontFamily:FONT}}>Ryd</button>}
+        </div>
       </div>
     </div>
     <section style={{...card,padding:12,minHeight:220,display:"flex",flexDirection:"column"}}>

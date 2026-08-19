@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.6.1** (2026-06-23) — dagens første plan er gratis (auto-morgenplanen), og kvote-tælleren klæber til toppen i Spørg.
 **1.6.0** (2026-06-23) — AI-kvote: 5 chat og 5 planer pr. person pr. dag, med synlig tæller og forberedt tilkøb.
 **1.5.0** (2026-06-23) — doseringsrækkefølge efter Swim & Funs trin 1–4, sikkerhedsregel om ikke at blande, og kildebekræftede ventetider.
 **1.4.0** (2026-06-23) — PWA (hjemmeskærm) og trendgraf over målinger.
