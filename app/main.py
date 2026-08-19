@@ -229,6 +229,9 @@ async def ai_quota(uid: int | None) -> dict:
     """Dagens AI-forbrug og hvad der er tilbage, pr. type."""
     out = {"limit": AI_DAILY_LIMIT, "bonus": 0, "used": {k: 0 for k in AI_KINDS}}
     if not (_pool and uid):
+        # Uden login (fx lokal udvikling) er der ingen kvote — meld fuldt hus,
+        # så svaret altid har samme form.
+        out["left"] = {k: AI_DAILY_LIMIT for k in AI_KINDS}
         return out
     async with _pool.acquire() as conn:
         row = await conn.fetchrow(
