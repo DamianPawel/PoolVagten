@@ -2,6 +2,16 @@
 
 Omvendt kronologisk arbejdslog. Nyeste øverst.
 
+## 2026-08-19 — "Spørg" kan nu slå op på nettet
+Baggrund: chatten blev spurgt hvor længe man skal backwashe og rinse. Den nægtede korrekt at gætte (fakta-reglen virkede), men appen foreslår jo selv "Returskyl FilterBalls (backwash + rinse)" uden at kunne sige hvor længe. Manglen var viden, ikke opførsel.
+
+- Slår Anthropics **serverside web search-værktøj** til i chatten. Planen har det bevidst ikke — den skal bruge de kendte doser.
+- Værktøjsvarianten vælges efter model: `web_search_20260209` på Sonnet 4.6 (og Opus 4.6+/Sonnet 5), `web_search_20250305` på reservemodellen Haiku 4.5, som ikke understøtter den nye.
+- Afgrænset med `allowed_domains` (default `swim-fun.com`) og `max_uses` (default 3 pr. svar). Begge styres af `AI_SEARCH_DOMAINS` / `AI_SEARCH_MAX_USES`; tom domæneliste = frit på nettet, hvor `TOPIC_RULE` alene holder emnet til pool. `AI_SEARCH=0` slår det helt fra.
+- `TOPIC_RULE` fortæller nu modellen at den *har* søgning, hvornår den skal bruge det (når svaret ikke står i retningslinjerne), og at den skal sige hvor oplysningen kommer fra. Uden det svarede den "jeg har ikke adgang til internettet".
+- **`pause_turn` håndteres:** serverside-værktøjer kan pause midt i et svar. Turen sendes uændret tilbage (op til 3 gange), så modellen kan gøre den færdig. Timeout hævet til 90 s og `max_tokens` til 1200 for chatten, da søgeresultater fylder.
+- Omkostning: websøgning faktureres pr. søgning oveni tokens. Eksponeringen er begrænset af den daglige AI-kvote (5 chat pr. person) og loftet på 3 søgninger pr. svar.
+
 ## 2026-08-19 — Sæson-guide, backup, opgave-badge og egen dosismængde
 - **Sæson-guide** (Indstillinger → "Sæson"): nedlukning til vinter i 10 trin og opstart om foråret i 5, bygget på Swim & Funs egne guider. Nøgletal fra kilderne: luk først når vandet er **under 10 °C**, pH 7,0–7,4 → chokbehandling → WinterCare → filter ca. **6 timer**, vandstand **15 cm under returslangen**, vinterpude pustet **60–80 %** op, og pumpe/filter/varmepumpe tømmes helt for vand.
 - **WinterCare doseres efter vandhårdhed** (400–800 ml pr. 10.000 L). Tabellen vises skaleret til poolens størrelse — for 16.000 L bliver det 640–1.280 ml. Verificeret: 640 ml ved 0–6 °dH.

@@ -1,6 +1,7 @@
 # VERSIONS.md
 
 ## App-version
+**1.8.0** (2026-08-19) — "Spørg" kan slå op på nettet (afgrænset til pool og til udvalgte domæner).
 **1.7.0** (2026-08-19) — sæson-guide (nedlukning/opstart), backup-eksport, badge med forfaldne opgaver og egen mængde ved ekstra dosis.
 **1.6.1** (2026-06-23) — dagens første plan er gratis (auto-morgenplanen), og kvote-tælleren klæber til toppen i Spørg.
 **1.6.0** (2026-06-23) — AI-kvote: 5 chat og 5 planer pr. person pr. dag, med synlig tæller og forberedt tilkøb.
@@ -31,6 +32,9 @@
 | `ANTHROPIC_API_KEY` | Plan + chat, kun server-side |
 | `SESSION_SECRET` | Signerer session-cookies — **skift = alle logges ud** |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google-login |
+| `AI_SEARCH` | `0` slår websøgning i chatten fra. Default til |
+| `AI_SEARCH_DOMAINS` | Kommasepareret domæneliste for søgning. Default `swim-fun.com`; tom = frit på nettet |
+| `AI_SEARCH_MAX_USES` | Maks. søgninger pr. svar. Default `3` |
 | `AI_DAILY_LIMIT` | Antal AI-kald pr. person pr. dag pr. type (chat/plan). Standard `5` |
 | `REQUIRE_AUTH` | `1` = login kræves. Fjern variablen for at åbne appen igen (nødbremse) |
 
